@@ -19,6 +19,7 @@ from datetime import timedelta
 from enum import Enum
 from uuid import uuid4
 from random import shuffle
+from typing import Callable, List, Optional
 
 try:
     from signal import SIGKILL
@@ -29,10 +30,10 @@ import redis.exceptions
 
 from . import worker_registration
 from .command import parse_payload, PUBSUB_CHANNEL_TEMPLATE, handle_command
-from .compat import as_text, string_types, text_type
+from .utils import as_text
 from .connections import get_current_connection, push_connection, pop_connection
 
-from .defaults import (CALLBACK_TIMEOUT, DEFAULT_RESULT_TTL,
+from .defaults import (CALLBACK_TIMEOUT, DEFAULT_MAINTENANCE_TASK_INTERVAL, DEFAULT_RESULT_TTL,
                        DEFAULT_WORKER_TTL, DEFAULT_JOB_MONITORING_INTERVAL,
                        DEFAULT_LOGGING_FORMAT, DEFAULT_LOGGING_DATE_FORMAT,
                        DEFAULT_THREADPOOL_SIZE)
@@ -41,11 +42,12 @@ from .job import Job, JobStatus
 from .logutils import setup_loghandlers
 from .queue import Queue
 from .registry import FailedJobRegistry, StartedJobRegistry, clean_registries
+from .results import Result
 from .scheduler import RQScheduler
 from .suspension import is_suspended
 from .timeouts import JobTimeoutException, HorseMonitorTimeoutException, UnixSignalDeathPenalty, TimerDeathPenalty
 from .utils import (backend_class, ensure_list, get_version,
-                    make_colorizer, utcformat, utcnow, utcparse)
+                    make_colorizer, utcformat, utcnow, utcparse, compact)
 from .version import VERSION
 from .worker_registration import clean_worker_registry, get_keys
 from .serializers import resolve_serializer
@@ -60,15 +62,12 @@ green = make_colorizer('darkgreen')
 yellow = make_colorizer('darkyellow')
 blue = make_colorizer('darkblue')
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("rq.worker")
 
 
 class StopRequested(Exception):
     pass
 
-
-def compact(a_list):
-    return [x for x in a_list if x is not None]
 
 
 _signames = dict((getattr(signal, signame), signame)
@@ -181,7 +180,7 @@ class Worker:
         if connection is None:
             connection = get_current_connection()
         self.connection = connection
-
+        
         self.redis_server_version = None
 
         self.job_class = backend_class(self, 'job_class', override=job_class)
@@ -194,14 +193,14 @@ class Worker:
         queues = [self.queue_class(name=q,
                                    connection=connection,
                                    job_class=self.job_class, serializer=self.serializer)
-                  if isinstance(q, string_types) else q
+                  if isinstance(q, str) else q
                   for q in ensure_list(queues)]
 
         self.name: str = name or uuid4().hex
         self.queues = queues
         self.validate_queues()
         self._ordered_queues = self.queues[:]
-        self._exc_handlers = []
+        self._exc_handlers: List[Callable] = []
 
         self.default_result_ttl = default_result_ttl
         self.default_worker_ttl = default_worker_ttl
@@ -228,8 +227,8 @@ class Worker:
         self.disable_default_exception_handler = disable_default_exception_handler
 
         if prepare_for_work:
-            self.hostname = socket.gethostname()
-            self.pid = os.getpid()
+            self.hostname: Optional[str] = socket.gethostname()
+            self.pid: Optional[int] = os.getpid()
             try:
                 connection.client_setname(self.name)
             except redis.exceptions.ResponseError:
@@ -255,7 +254,7 @@ class Worker:
         else:
             self.hostname = None
             self.pid = None
-            self.ip_address = None
+            self.ip_address = 'unknown'
 
         if isinstance(exception_handlers, (list, tuple)):
             for handler in exception_handlers:
@@ -292,6 +291,11 @@ class Worker:
     def pubsub_channel_name(self):
         """Returns the worker's Redis hash key."""
         return PUBSUB_CHANNEL_TEMPLATE % self.name
+
+    @property
+    def supports_redis_streams(self) -> bool:
+        """Only supported by Redis server >= 5.0 is required."""
+        return self.get_redis_server_version() >= (5, 0, 0)
 
     @property
     def horse_pid(self):
@@ -545,7 +549,7 @@ class Worker:
         """
         # No need to try to start scheduler on first run
         if self.last_cleaned_at:
-            if self.scheduler and not self.scheduler._process:
+            if self.scheduler and (not self.scheduler._process or not self.scheduler._process.is_alive()):
                 self.scheduler.acquire_locks(auto_start=True)
         self.clean_registries()
 
@@ -686,10 +690,12 @@ class Worker:
                 if self.should_run_maintenance_tasks:
                     self.run_maintenance_tasks()
 
+                self.log.debug(f"Dequeueing jobs on queues {self._ordered_queues} and timeout {timeout}")
                 result = self.queue_class.dequeue_any(self._ordered_queues, timeout,
                                                       connection=self.connection,
                                                       job_class=self.job_class,
                                                       serializer=self.serializer)
+                self.log.debug(f"Dequeued job {result[1]} from {result[0]}")
                 if result is not None:
 
                     job, queue = result
@@ -826,7 +832,7 @@ class Worker:
                 self.set_current_job_working_time((utcnow() - job.started_at).total_seconds())
 
                 # Kill the job from this side if something is really wrong (interpreter lock/etc).
-                if job.timeout != -1 and self.current_job_working_time > (job.timeout + 60):
+                if job.timeout != -1 and self.current_job_working_time > (job.timeout + 60):  # type: ignore
                     self.heartbeat(self.job_monitoring_interval + 60)
                     self.kill_horse()
                     self.wait_for_horse()
@@ -942,7 +948,7 @@ class Worker:
         """Performs misc bookkeeping like updating states prior to
         job execution.
         """
-
+        self.log.debug(f"Preparing for execution of Job ID {job.id}")
         with self.connection.pipeline() as pipeline:
             self.set_current_job_id(job.id, pipeline=pipeline)
             self.set_current_job_working_time(0, pipeline=pipeline)
@@ -953,17 +959,20 @@ class Worker:
 
             job.prepare_for_execution(self.name, pipeline=pipeline)
             pipeline.execute()
+            self.log.debug(f"Job preparation finished.")
 
         msg = 'Processing {0} from {1} since {2}'
         self.procline(msg.format(job.func_name, job.origin, time.time()))
 
     def handle_job_failure(self, job: 'Job', queue: 'Queue', started_job_registry=None,
                            exc_string=''):
-        """Handles the failure or an executing job by:
+        """
+        Handles the failure or an executing job by:
             1. Setting the job status to failed
             2. Removing the job from StartedJobRegistry
             3. Setting the workers current job to None
             4. Add the job to FailedJobRegistry
+        `save_exc_to_job` should only be used for testing purposes
         """
         self.log.debug('Handling failed execution of job %s', job.id)
         with self.connection.pipeline() as pipeline:
@@ -974,7 +983,6 @@ class Worker:
                     job_class=self.job_class,
                     serializer=self.serializer
                 )
-            job.worker_name = None
 
             # check whether a job was stopped intentionally and set the job
             # status appropriately if it was this job.
@@ -994,8 +1002,14 @@ class Worker:
             if not self.disable_default_exception_handler and not retry:
                 failed_job_registry = FailedJobRegistry(job.origin, job.connection,
                                                         job_class=self.job_class, serializer=job.serializer)
+                # Exception should be saved in job hash if server
+                # doesn't support Redis streams
+                _save_exc_to_job = not self.supports_redis_streams
                 failed_job_registry.add(job, ttl=job.failure_ttl,
-                                        exc_string=exc_string, pipeline=pipeline)
+                                        exc_string=exc_string, pipeline=pipeline,
+                                        _save_exc_to_job=_save_exc_to_job)
+                if self.supports_redis_streams:
+                    Result.create_failure(job, job.failure_ttl, exc_string=exc_string, pipeline=pipeline)
                 with suppress(redis.exceptions.ConnectionError):
                     pipeline.execute()
 
@@ -1021,7 +1035,7 @@ class Worker:
                 # even if Redis is down
                 pass
 
-    def handle_job_success(self, job: 'Job', queue: 'Queue', started_job_registry):
+    def handle_job_success(self, job: 'Job', queue: 'Queue', started_job_registry: StartedJobRegistry):
         self.log.debug('Handling successful execution of job %s', job.id)
 
         with self.connection.pipeline() as pipeline:
@@ -1041,17 +1055,22 @@ class Worker:
                     self.set_current_job_id(None, pipeline=pipeline)
                     self.increment_successful_job_count(pipeline=pipeline)
                     self.increment_total_working_time(
-                        job.ended_at - job.started_at, pipeline
+                        job.ended_at - job.started_at, pipeline  # type: ignore
                     )
 
                     result_ttl = job.get_result_ttl(self.default_result_ttl)
                     if result_ttl != 0:
                         self.log.debug('Setting job %s status to finished', job.id)
                         job.set_status(JobStatus.FINISHED, pipeline=pipeline)
-                        job.worker_name = None
-                        # Don't clobber the user's meta dictionary!
-                        job.save(pipeline=pipeline, include_meta=False)
-
+                        # Result should be saved in job hash only if server
+                        # doesn't support Redis streams
+                        include_result = not self.supports_redis_streams
+                        # Don't clobber user's meta dictionary!
+                        job.save(pipeline=pipeline, include_meta=False,
+                                 include_result=include_result)
+                        if self.supports_redis_streams:
+                            Result.create(job, Result.Type.SUCCESSFUL, return_value=job._result,
+                                          ttl=result_ttl, pipeline=pipeline)
                         finished_job_registry = queue.finished_job_registry
                         finished_job_registry.add(job, result_ttl, pipeline)
 
@@ -1068,12 +1087,14 @@ class Worker:
 
     def execute_success_callback(self, job: 'Job', result):
         """Executes success_callback with timeout"""
+        self.log.debug(f"Running success callbacks for {job.id}")
         job.heartbeat(utcnow(), CALLBACK_TIMEOUT)
         with self.death_penalty_class(CALLBACK_TIMEOUT, JobTimeoutException, job_id=job.id):
             job.success_callback(job, self.connection, result)
 
     def execute_failure_callback(self, job):
         """Executes failure_callback with timeout"""
+        self.log.debug(f"Running failure callbacks for {job.id}")
         job.heartbeat(utcnow(), CALLBACK_TIMEOUT)
         with self.death_penalty_class(CALLBACK_TIMEOUT, JobTimeoutException, job_id=job.id):
             job.failure_callback(job, self.connection, *sys.exc_info())
@@ -1085,6 +1106,7 @@ class Worker:
         push_connection(self.connection)
 
         started_job_registry = queue.started_job_registry
+        self.log.debug("Started Job Registry set.")
 
         try:
             self.prepare_job_execution(job)
@@ -1092,7 +1114,9 @@ class Worker:
             job.started_at = utcnow()
             timeout = job.timeout or self.queue_class.DEFAULT_TIMEOUT
             with self.death_penalty_class(timeout, JobTimeoutException, job_id=job.id):
+                self.log.debug("Performing Job...")
                 rv = job.perform()
+                self.log.debug(f"Finished performing Job ID {job.id}")
 
             job.ended_at = utcnow()
 
@@ -1107,6 +1131,7 @@ class Worker:
                                     queue=queue,
                                     started_job_registry=started_job_registry)
         except:  # NOQA
+            self.log.debug(f"Job {job.id} raised an exception.")
             job.ended_at = utcnow()
             exc_info = sys.exc_info()
             exc_string = ''.join(traceback.format_exception(*exc_info))
@@ -1132,7 +1157,7 @@ class Worker:
 
         self.log.info('%s: %s (%s)', green(job.origin), blue('Job OK'), job.id)
         if rv is not None:
-            log_result = "{0!r}".format(as_text(text_type(rv)))
+            log_result = "{0!r}".format(as_text(str(rv)))
             self.log.debug('Result: %s', yellow(log_result))
 
         if self.log_result_lifespan:
@@ -1148,6 +1173,7 @@ class Worker:
 
     def handle_exception(self, job: 'Job', *exc_info):
         """Walks the exception handler stack to delegate exception handling."""
+        self.log.debug(f"Handling exception for {job.id}.")
         exc_string = ''.join(traceback.format_exception(*exc_info))
 
         # If the job cannot be deserialized, it will raise when func_name or
@@ -1159,14 +1185,17 @@ class Worker:
                 'arguments': job.args,
                 'kwargs': job.kwargs,
             }
+            func_name = job.func_name
         except DeserializationError:
             extra = {}
+            func_name = '<DeserializationError>'
 
         # the properties below should be safe however
         extra.update({'queue': job.origin, 'job_id': job.id})
-
+        
         # func_name
-        self.log.error(exc_string, exc_info=True, extra=extra)
+        self.log.error(f'[Job {job.id}]: exception raised while executing ({func_name})\n' + exc_string,
+                       extra=extra)
 
         for handler in self._exc_handlers:
             self.log.debug('Invoking exception handler %s', handler)
@@ -1214,7 +1243,7 @@ class Worker:
         """Maintenance tasks should run on first startup or every 10 minutes."""
         if self.last_cleaned_at is None:
             return True
-        if (utcnow() - self.last_cleaned_at) > timedelta(minutes=10):
+        if (utcnow() - self.last_cleaned_at) > timedelta(seconds=DEFAULT_MAINTENANCE_TASK_INTERVAL):
             return True
         return False
 

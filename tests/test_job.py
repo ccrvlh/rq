@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 from redis import WatchError
 
-from rq.compat import as_text
+from rq.utils import as_text
 from rq.exceptions import DeserializationError, InvalidJobOperation, NoSuchJobError
 from rq.job import Job, JobStatus, Dependency, cancel_job, get_current_job
 from rq.queue import Queue
@@ -298,7 +298,7 @@ class TestJob(RQTestCase):
         exception_string = 'Some exception'
 
         job = Job.create(func=fixtures.say_hello, args=('Lionel',))
-        job.exc_info = exception_string
+        job._exc_info = exception_string
         job.save()
 
         # exc_info is stored in compressed format
