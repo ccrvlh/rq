@@ -117,3 +117,17 @@ class TimerDeathPenalty(BaseDeathPenalty):
         """Cancels the timer."""
         self._timer.cancel()
         self._timer = None
+
+
+class GeventDeathPenalty(BaseDeathPenalty):
+    import gevent
+
+    def setup_death_penalty(self):
+        exception = JobTimeoutException(
+            "Gevent Job exceeded maximum timeout value (%d seconds)." % self._timeout
+        )
+        self.gevent_timeout = self.gevent.Timeout(self._timeout, exception)
+        self.gevent_timeout.start()
+
+    def cancel_death_penalty(self):
+        self.gevent_timeout.cancel()

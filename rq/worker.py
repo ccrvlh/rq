@@ -20,10 +20,18 @@ if TYPE_CHECKING:
     from redis.client import Pipeline
 
 try:
+    import gevent
+    import gevent.pool
+    from gevent import get_hub
+    from gevent.hub import LoopExit
+except ImportError:
+    pass
+
+try:
     from signal import SIGKILL
 except ImportError:
     from signal import SIGTERM as SIGKILL
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 import redis.exceptions
 
 from . import worker_registration
@@ -1378,3 +1386,228 @@ class RandomWorker(Worker):
 
     def reorder_queues(self, reference_queue):
         shuffle(self._ordered_queues)
+
+
+class GeventWorker(Worker):
+    death_penalty_class = GeventDeathPenalty
+
+    def __init__(self, pool_size: int, *args, **kwargs):
+        self.pool_size = pool_size
+        self.gevent_pool = gevent.pool.Pool(pool_size)
+        self.connection: Redis[bytes]
+        super(GeventWorker, self).__init__(*args, **kwargs)
+
+    @contextmanager
+    @classmethod
+    def disable_exception_traceback():
+        """
+        All traceback information is suppressed and only the exception type and value are printed
+        """
+        default_value = getattr(sys, "tracebacklimit", 1000)  # `1000` is a Python's default value
+        sys.tracebacklimit = 0
+        yield
+        sys.tracebacklimit = default_value  # revert changes
+
+    def register_birth(self):
+        super(GeventWorker, self).register_birth()
+        self.connection.hset(self.key, "pool_size", self.gevent_pool.size)
+
+    def heartbeat(self, timeout=0, pipeline=None):
+        connection = pipeline if pipeline is not None else self.connection
+        super(GeventWorker, self).heartbeat(timeout)
+        connection.hset(self.key, "current_pool_len", len(self.gevent_pool))
+
+    def _gevent_wait_free_pool(self) -> None:
+        gevent.sleep(0.1)
+        if self._stop_requested:
+            raise StopRequested()
+
+    def _install_signal_handlers(self):
+        gevent.signal_handler(signal.SIGINT, self._request_stop)
+        gevent.signal_handler(signal.SIGTERM, self._request_stop)
+
+    def _request_force_stop(self):
+        logger.warning("Cold shut down.")
+        self.gevent_pool.kill()
+        raise SystemExit()
+
+    def _request_stop(self):
+        if not self._stop_requested:
+            gevent.signal_handler(signal.SIGINT, self._request_force_stop)
+            gevent.signal_handler(signal.SIGTERM, self._request_force_stop)
+            logger.warning("Warm shut down requested.")
+            logger.warning(
+                "Stopping after all greenlets are finished. "
+                "Press Ctrl+C again for a cold shutdown."
+            )
+            self._stopped = True
+            self.gevent_pool.join()
+
+        with self.disable_exception_traceback():
+            logger.warning("Working gracefully shut down.")
+            sys.exit()
+
+    def work(
+        self,
+        burst: bool = False,
+        logging_level: str = "INFO",
+        date_format=DEFAULT_LOGGING_DATE_FORMAT,
+        log_format=DEFAULT_LOGGING_FORMAT,
+        max_jobs=None,
+        with_scheduler: bool = False,
+    ):
+        """Starts the work loop.
+
+        Pops and performs all jobs on the current list of queues.  When all
+        queues are empty, block and wait for new jobs to arrive on any of the
+        queues, unless `burst` mode is enabled.
+
+        The return value indicates whether any jobs were processed.
+        """
+        setup_loghandlers(logging_level, date_format, log_format)
+        completed_jobs = 0
+        self.register_birth()
+        self.log.info("GeventWorker %s: started, version %s", self.key, VERSION)
+        self.subscribe()
+        self.set_state(WorkerStatus.STARTED)
+        qnames = self.queue_names()
+        self.log.info('*** Listening on %s...', green(', '.join(qnames)))
+
+        if with_scheduler:
+            self.scheduler = RQScheduler(
+                self.queues,
+                connection=self.connection,
+                logging_level=logging_level,
+                date_format=date_format,
+                log_format=log_format,
+                serializer=self.serializer,
+            )
+            self.scheduler.acquire_locks()
+            # If lock is acquired, start scheduler
+            if self.scheduler.acquired_locks:
+                # If worker is run on burst mode, enqueue_scheduled_jobs()
+                # before working. Otherwise, start scheduler in a separate process
+                if burst:
+                    self.scheduler.enqueue_scheduled_jobs()
+                    self.scheduler.release_locks()
+                else:
+                    self.scheduler.start()
+
+        self._install_signal_handlers()
+        try:
+            while True:
+                try:
+                    self.check_for_suspension(burst)
+
+                    if self.should_run_maintenance_tasks:
+                        self.run_maintenance_tasks()
+
+                    if self._stop_requested:
+                        self.log.info('Worker %s: stopping on request', self.key)
+                        break
+
+                    timeout = None if burst else self._get_timeout()
+                    result = self.dequeue_job_and_maintain_ttl(timeout)
+                    result = self.dequeue_job(timeout)
+                    if result is None and burst:
+                        try:
+                            # Make sure dependented jobs are enqueued.
+                            get_hub().switch()
+                        except LoopExit:
+                            pass
+                        result = self.dequeue_job(timeout)
+                    job, queue = result
+                    self.reorder_queues(reference_queue=queue)
+                    self.execute_job(job, queue)
+                    self.heartbeat()
+
+                    completed_jobs += 1
+                    if max_jobs is not None:
+                        if completed_jobs >= max_jobs:
+                            self.log.info("Worker %s: finished executing %d jobs, quitting", self.key, completed_jobs)
+                            break
+
+                except redis.exceptions.TimeoutError:
+                    self.log.error(f"Worker {self.key}: Redis connection timeout, quitting...")
+                    break
+
+                except StopRequested:
+                    break
+
+                except SystemExit:
+                    # Cold shutdown detected
+                    raise
+
+                except:  # noqa
+                    self.log.error('Worker %s: found an unhandled exception, quitting...', self.key, exc_info=True)
+                    break
+        finally:
+            if not self.is_horse:
+
+                if self.scheduler:
+                    self.stop_scheduler()
+
+                self.register_death()
+                self.unsubscribe()
+        return bool(completed_jobs)
+
+    def execute_job(self, job, queue):
+        def job_done(child):
+            self.heartbeat()
+            if job.get_status() == JobStatus.FINISHED:
+                queue.enqueue_dependents(job)
+
+        logger.info("Executing job %s from %s", blue(job.id), green(queue.name))
+        child_greenlet = self.gevent_pool.spawn(self.perform_job, job, queue)
+        child_greenlet.link(job_done)
+
+    def dequeue_job(self, timeout):
+        result = None
+        qnames = ','.join(self.queue_names())
+
+        self.set_state(WorkerStatus.IDLE)
+        self.procline('Listening on ' + qnames)
+        self.log.debug('*** Listening on %s...', green(qnames))
+        connection_wait_time = 1.0
+        while True:
+
+            while self.gevent_pool.full():
+                self._gevent_wait_free_pool()
+
+            try:
+                self.heartbeat()
+
+                if self.should_run_maintenance_tasks:
+                    self.run_maintenance_tasks()
+
+                self.log.debug(f"Dequeueing jobs on queues {self._ordered_queues} and timeout {timeout}")
+                result = self.queue_class.dequeue_any(
+                    self._ordered_queues,
+                    timeout,
+                    connection=self.connection,
+                    job_class=self.job_class,
+                    serializer=self.serializer,
+                )
+                self.log.debug(f"Dequeued job {result[1]} from {result[0]}")
+                if result is not None:
+
+                    job, queue = result
+                    job.redis_server_version = self.get_redis_server_version()
+                    if self.log_job_description:
+                        self.log.info('%s: %s (%s)', green(queue.name), blue(job.description), job.id)
+                    else:
+                        self.log.info('%s: %s', green(queue.name), job.id)
+
+                break
+            except DequeueTimeout:
+                pass
+            except redis.exceptions.ConnectionError as conn_err:
+                self.log.error(
+                    'Could not connect to Redis instance: %s Retrying in %d seconds...', conn_err, connection_wait_time
+                )
+                time.sleep(connection_wait_time)
+                connection_wait_time *= self.exponential_backoff_factor
+                connection_wait_time = min(connection_wait_time, self.max_connection_wait_time)
+
+        self.heartbeat()
+        return result
