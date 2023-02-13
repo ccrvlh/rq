@@ -54,14 +54,11 @@ workers = rq.get_workers()
 # Get all queues
 queues = rq.get_queues()
 
-# Filter jobs
-queues = rq.get_jobs(status="failed")
+# Get all jobs
+jobs = rq.get_jobs()
 
-# Or just query all of them
-queues = rq.get_jobs()
-
-# Or just query all of them
-queues = rq.get_jobs()
+# Or filter them
+jobs = rq.get_jobs(status="failed")
 ```
 
 And allows for more powerful programmatic control over the instance:
