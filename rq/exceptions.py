@@ -34,3 +34,7 @@ class TimeoutFormatError(Exception):
 
 class AbandonedJobError(Exception):
     pass
+
+
+class StopRequested(Exception):
+    pass

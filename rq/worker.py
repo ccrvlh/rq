@@ -49,6 +49,7 @@ from .const import WorkerStatus
 from .const import DequeueStrategy
 from .exceptions import DequeueTimeout
 from .exceptions import DeserializationError
+from .exceptions import StopRequested
 from .job import Job
 from .job import Job
 from .logutils import blue, green, setup_loghandlers, yellow
@@ -72,9 +73,6 @@ except ImportError:
 
 logger = logging.getLogger("rq.worker")
 
-
-class StopRequested(Exception):
-    pass
 
 
 _signames = dict(
