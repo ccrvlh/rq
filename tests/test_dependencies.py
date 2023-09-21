@@ -198,6 +198,7 @@ class TestDependencies(RQTestCase):
         w.work(burst=True)
         assert job_c.result
 
+
 class TestThreadPoolWorkerDependencies(RQTestCase):
 
     def test_job_dependency(self):

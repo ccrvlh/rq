@@ -3,13 +3,12 @@ title: "RQ: Results"
 layout: docs
 ---
 
-Enqueueing jobs is delayed execution of function calls.  This means we're
+Enqueueing jobs is delayed execution of function calls. This means we're
 solving a problem, but are getting back a few in return.
-
 
 ## Dealing with Results
 
-Python functions may have return values, so jobs can have them, too.  If a job
+Python functions may have return values, so jobs can have them, too. If a job
 returns a non-`None` return value, the worker will write that return value back
 to the job's Redis hash under the `result` key. The job's Redis hash itself
 will expire after 500 seconds by default after the job is finished.
@@ -18,14 +17,14 @@ The party that enqueued the job gets back a `Job` instance as a result of the
 enqueueing itself. Such a `Job` object is a proxy object that is tied to the
 job's ID, to be able to poll for results.
 
-
 ### Return Value TTL
+
 Return values are written back to Redis with a limited lifetime (via a Redis
 expiring key), which is merely to avoid ever-growing Redis databases.
 
 The TTL value of the job result can be specified using the
-`result_ttl` keyword argument to `enqueue()` and `enqueue_call()` calls.  It
-can also be used to disable the expiry altogether.  You then are responsible
+`result_ttl` keyword argument to `enqueue()` and `enqueue_call()` calls. It
+can also be used to disable the expiry altogether. You then are responsible
 for cleaning up jobs yourself, though, so be careful to use that.
 
 You can do the following:
@@ -39,7 +38,6 @@ Additionally, you can use this for keeping around finished jobs without return
 values, which would be deleted immediately by default.
 
     q.enqueue(func_without_rv, result_ttl=500)  # job kept explicitly
-
 
 ## Dealing with Exceptions
 
@@ -58,26 +56,25 @@ kept for 1 year.
 
 The job itself has some useful properties that can be used to aid inspection:
 
-* the original creation time of the job
-* the last enqueue date
-* the originating queue
-* a textual description of the desired function invocation
-* the exception information
+- the original creation time of the job
+- the last enqueue date
+- the originating queue
+- a textual description of the desired function invocation
+- the exception information
 
 This makes it possible to inspect and interpret the problem manually and
 possibly resubmit the job.
 
-
 ## Dealing with Interruptions
 
 When workers get killed in the polite way (Ctrl+C or `kill`), RQ tries hard not
-to lose any work.  The current work is finished after which the worker will
-stop further processing of jobs.  This ensures that jobs always get a fair
+to lose any work. The current work is finished after which the worker will
+stop further processing of jobs. This ensures that jobs always get a fair
 chance to finish themselves.
 
 However, workers can be killed forcefully by `kill -9`, which will not give the
 workers a chance to finish the job gracefully or to put the job on the `failed`
-queue.  Therefore, killing a worker forcefully could potentially lead to
+queue. Therefore, killing a worker forcefully could potentially lead to
 damage. Just sayin'.
 
 If the worker gets killed while a job is running, it will eventually end up in
@@ -87,7 +84,7 @@ Before 0.14 the behavor was the same, but the cleanup task raised a
 
 ## Dealing with Job Timeouts
 
-By default, jobs should execute within 180 seconds.  After that, the worker
+By default, jobs should execute within 180 seconds. After that, the worker
 kills the work horse and puts the job onto the `failed` queue, indicating the
 job timed out.
 
@@ -116,8 +113,8 @@ low.enqueue(really_really_slow, job_timeout=3600)  # 1 hr
 Individual jobs can still specify an alternative timeout, as workers will
 respect these.
 
-
 ## Job Results
+
 _New in version 1.12.0._
 
 If a job is executed multiple times, you can access its execution history by calling
@@ -125,18 +122,19 @@ If a job is executed multiple times, you can access its execution history by cal
 
 Calling `job.latest_result()` will return the latest `Result` object, which has the
 following attributes:
-* `type` - an enum of `SUCCESSFUL`, `FAILED` or `STOPPED`
-* `created_at` - the time at which result is created
-* `return_value` - job's return value, only present if result type is `SUCCESSFUL`
-* `exc_string` - the exception raised by job, only present if result type is `FAILED`
-* `job_id`
+
+- `type` - an enum of `SUCCESSFUL`, `FAILED` or `STOPPED`
+- `created_at` - the time at which result is created
+- `return_value` - job's return value, only present if result type is `SUCCESSFUL`
+- `exc_string` - the exception raised by job, only present if result type is `FAILED`
+- `job_id`
 
 ```python
 job = Job.fetch(id='my_id', connection=redis)
 result = job.latest_result()  #  returns Result(id=uid, type=SUCCESSFUL)
-if result == result.Type.SUCCESSFUL: 
-    print(result.return_value) 
-else: 
+if result == ResultType.SUCCESSFUL:
+    print(result.return_value)
+else:
     print(result.exc_string)
 ```
 
@@ -153,8 +151,8 @@ To access multiple results, use `job.results()`.
 
 ```python
 job = Job.fetch(id='my_id', connection=redis)
-for result in job.results(): 
-    print(result.created_at, result.type)
+for result in job.results():
+    print(result.created_at, ResultType)
 ```
 
 To block until a result arrives, you can pass a timeout in seconds to `job.latest_result()`. If any results already exist, the latest result is returned immediately. If the timeout is reached without a result arriving, a `None` object is returned.

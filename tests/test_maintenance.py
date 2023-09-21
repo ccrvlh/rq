@@ -1,13 +1,14 @@
 import unittest
-from unittest.mock import patch
 
+from unittest.mock import patch
 from redis import Redis
 
 from rq.job import JobStatus
-from rq.maintenance import clean_intermediate_queue
 from rq.queue import Queue
 from rq.utils import get_version
+from rq.worker import BaseWorker
 from rq.worker import ForkWorker
+
 from tests import RQTestCase
 from tests.fixtures import say_hello
 
@@ -31,6 +32,6 @@ class MaintenanceTestCase(RQTestCase):
             self.assertIsNotNone(self.testconn.lpos(queue.intermediate_queue_key, job.id))
             # After cleaning up the intermediate queue, job status should be `FAILED`
             # and job is also removed from the intermediate queue
-            clean_intermediate_queue(worker, queue)
+            BaseWorker.clean_intermediate_queue(worker, queue)
             self.assertEqual(job.get_status(), JobStatus.FAILED)
             self.assertIsNone(self.testconn.lpos(queue.intermediate_queue_key, job.id))

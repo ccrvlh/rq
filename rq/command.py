@@ -2,7 +2,9 @@ import json
 import os
 import signal
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING
+from typing import Any
+from typing import Dict
 
 from rq.exceptions import InvalidJobOperation
 from rq.job import Job

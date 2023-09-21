@@ -96,7 +96,7 @@ class Result:
     def create_failure(cls, job, ttl, exc_string, pipeline=None):
         result = cls(
             job_id=job.id,
-            type=cls.Type.FAILED,
+            type=ResultType.FAILED,
             connection=job.connection,
             exc_string=exc_string,
             serializer=job.serializer,
@@ -147,7 +147,7 @@ class Result:
 
         return Result(
             job_id,
-            Result.Type(int(payload['type'])),
+            ResultType(int(payload['type'])),
             connection=connection,
             id=result_id,
             created_at=created_at,

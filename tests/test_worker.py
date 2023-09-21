@@ -19,6 +19,7 @@ from unittest.mock import Mock
 from redis import Redis
 
 from rq import Queue, Worker, ForkWorker, get_current_connection
+from rq.const import ResultType
 from rq.defaults import DEFAULT_MAINTENANCE_TASK_INTERVAL
 from rq.job import Job, JobStatus, Retry
 from rq.registry import FailedJobRegistry, FinishedJobRegistry, StartedJobRegistry
@@ -377,7 +378,7 @@ class TestWorker(RQTestCase):
         if job.supports_redis_streams:
             result = Result.fetch_latest(job)
             self.assertEqual(result.exc_string, job.exc_info)
-            self.assertEqual(result.type, Result.Type.FAILED)
+            self.assertEqual(result.type, ResultType.FAILED)
 
     def test_statistics(self):
         """Successful and failed job counts are saved properly"""

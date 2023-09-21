@@ -27,7 +27,7 @@ from rq.exceptions import NoSuchJobError
 from rq.serializers import SerializerInterface, resolve_serializer
 from rq.types import FunctionReferenceType
 from rq.types import JobDependencyType
-from rq.const import JobStatus
+from rq.const import JobStatus, ResultType
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -325,7 +325,7 @@ class Job:
             if not self._cached_result:
                 self._cached_result = self.latest_result()
 
-            if self._cached_result and self._cached_result.type == Result.Type.FAILED:
+            if self._cached_result and self._cached_result.type == ResultType.FAILED:
                 return self._cached_result.exc_string
 
         return self._exc_info
@@ -356,7 +356,7 @@ class Job:
             if not self._cached_result:
                 self._cached_result = self.latest_result()
 
-            if self._cached_result and self._cached_result.type == Result.Type.SUCCESSFUL:
+            if self._cached_result and self._cached_result.type == ResultType.SUCCESSFUL:
                 return self._cached_result.return_value
 
         # Fallback to old behavior of getting result from job hash
@@ -892,7 +892,7 @@ class Job:
         if not self._cached_result:
             self._cached_result = self.latest_result()
 
-        if self._cached_result and self._cached_result.type == Result.Type.SUCCESSFUL:
+        if self._cached_result and self._cached_result.type == ResultType.SUCCESSFUL:
             return self._cached_result.return_value
 
         return None
@@ -1048,7 +1048,7 @@ class Job:
         if self.supports_redis_streams:
             from .results import Result
 
-            Result.create(self, Result.Type.SUCCESSFUL, return_value=self._result, ttl=result_ttl, pipeline=pipeline)
+            Result.create(self, ResultType.SUCCESSFUL, return_value=self._result, ttl=result_ttl, pipeline=pipeline)
 
         if result_ttl != 0:
             finished_job_registry = self.finished_job_registry

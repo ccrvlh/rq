@@ -7,6 +7,7 @@ import random
 import signal
 import socket
 import sys
+import threading
 import time
 import traceback
 import warnings
@@ -26,6 +27,7 @@ from typing import Callable
 from uuid import uuid4
 from redis import Redis
 from contextlib import suppress
+from concurrent.futures import ThreadPoolExecutor
 
 from rq.command import handle_command
 from rq.command import parse_payload
@@ -52,6 +54,7 @@ from rq.const import DequeueStrategy
 from rq.exceptions import DequeueTimeout
 from rq.exceptions import DeserializationError
 from rq.exceptions import StopRequested
+from rq.exceptions import HorseMonitorTimeoutException
 from rq.job import Job
 from rq.job import JobStatus
 from rq.queue import Queue
@@ -61,7 +64,7 @@ from rq.registry import StartedJobRegistry
 from rq.scheduler import Scheduler
 from rq.serializers import resolve_serializer
 from rq.suspension import is_suspended
-from rq.timeouts import HorseMonitorTimeoutException, TimerDeathPenalty
+from rq.timeouts import TimerDeathPenalty
 from rq.timeouts import JobTimeoutException
 from rq.timeouts import UnixSignalDeathPenalty
 

@@ -1,9 +1,13 @@
 from datetime import timedelta
 
 from rq import Queue, ForkWorker
-from rq.job import UNEVALUATED, Callback, Job, JobStatus
+from rq.job import UNEVALUATED
+from rq.job import Callback
+from rq.job import Job
+from rq.const import JobStatus
 from rq.serializers import JSONSerializer
-from rq.worker import ThreadPoolWorker, Worker
+from rq.worker import Worker
+from rq.worker import ThreadPoolWorker
 from tests import RQTestCase
 from tests.fixtures import (
     div_by_zero,
@@ -341,6 +345,7 @@ class JobCallbackTestCase(RQTestCase):
 
         job = Job.fetch(id=job.id, connection=self.testconn)
         self.assertEqual(job.stopped_callback, print)
+
 
 class ThreadPoolWorkerCallbackTestCase(RQTestCase):
     def test_success_callback(self):

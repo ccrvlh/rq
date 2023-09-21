@@ -1,10 +1,11 @@
 import json
+
 from logging import getLogger
 from typing import List, Optional, Type, TypeVar
-
 from redis import Redis
 
-from rq import registry, utils
+from rq import registry
+from rq import utils
 from rq.job import Job
 from rq.job import JobStatus
 from rq.queue import Queue

@@ -7,6 +7,7 @@ from unittest.mock import PropertyMock
 from unittest.mock import patch
 from redis import Redis
 
+from rq.const import ResultType
 from rq.defaults import UNSERIALIZABLE_RETURN_VALUE_PAYLOAD
 from rq.job import Job
 from rq.queue import Queue
@@ -30,7 +31,7 @@ class TestScheduledJobRegistry(RQTestCase):
         result = Result.fetch_latest(job)
         self.assertIsNone(result)
 
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=1)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=1)
         result = Result.fetch_latest(job)
         self.assertEqual(result.return_value, 1)
         self.assertEqual(job.latest_result().return_value, 1)
@@ -41,10 +42,10 @@ class TestScheduledJobRegistry(RQTestCase):
         self.assertTrue(5000 < ttl <= 10000)
 
         # Check job with None return value
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=None)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=None)
         result = Result.fetch_latest(job)
         self.assertIsNone(result.return_value)
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=2)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=2)
         result = Result.fetch_latest(job)
         self.assertEqual(result.return_value, 2)
 
@@ -70,8 +71,8 @@ class TestScheduledJobRegistry(RQTestCase):
         self.assertIsNone(job.latest_result())
 
         result_1 = Result.create_failure(job, ttl=10, exc_string='exception')
-        result_2 = Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=1)
-        result_3 = Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=1)
+        result_2 = Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=1)
+        result_3 = Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=1)
 
         # Result.fetch_latest() returns the latest result
         result = Result.fetch_latest(job)
@@ -90,7 +91,7 @@ class TestScheduledJobRegistry(RQTestCase):
         self.assertEqual(Result.count(job), 0)
         Result.create_failure(job, ttl=10, exc_string='exception')
         self.assertEqual(Result.count(job), 1)
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=1)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=1)
         self.assertEqual(Result.count(job), 2)
 
     def test_delete_all(self):
@@ -98,7 +99,7 @@ class TestScheduledJobRegistry(RQTestCase):
         queue = Queue(connection=self.connection)
         job = queue.enqueue(say_hello)
         Result.create_failure(job, ttl=10, exc_string='exception')
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=1)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=1)
         Result.delete_all(job)
         self.assertEqual(Result.count(job), 0)
 
@@ -197,7 +198,7 @@ class TestScheduledJobRegistry(RQTestCase):
         # Returns None when there's no result
         self.assertIsNone(job.return_value())
 
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=1)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=1)
         self.assertEqual(job.return_value(), 1)
 
         # Returns None if latest result is a failure
@@ -213,7 +214,7 @@ class TestScheduledJobRegistry(RQTestCase):
         self.assertIsNotNone(job.return_value())
 
         job = queue.enqueue(div_by_zero)
-        self.assertEqual(job.latest_result().type, Result.Type.FAILED)
+        self.assertEqual(job.latest_result().type, ResultType.FAILED)
 
     def test_job_return_value_result_ttl_infinity(self):
         """Test job.return_value when queue.result_ttl=-1"""
@@ -223,7 +224,7 @@ class TestScheduledJobRegistry(RQTestCase):
         # Returns None when there's no result
         self.assertIsNone(job.return_value())
 
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=-1, return_value=1)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=-1, return_value=1)
         self.assertEqual(job.return_value(), 1)
 
     def test_job_return_value_result_ttl_zero(self):
@@ -234,7 +235,7 @@ class TestScheduledJobRegistry(RQTestCase):
         # Returns None when there's no result
         self.assertIsNone(job.return_value())
 
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=0, return_value=1)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=0, return_value=1)
         self.assertIsNone(job.return_value())
 
     def test_job_return_value_unserializable(self):
@@ -246,11 +247,11 @@ class TestScheduledJobRegistry(RQTestCase):
         self.assertIsNone(job.return_value())
 
         # tempfile.NamedTemporaryFile() is not picklable
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=tempfile.NamedTemporaryFile())
+        Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=tempfile.NamedTemporaryFile())
         self.assertEqual(job.return_value(), UNSERIALIZABLE_RETURN_VALUE_PAYLOAD)
         self.assertEqual(Result.count(job), 1)
 
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=1)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=1)
         self.assertEqual(Result.count(job), 2)
 
     def test_blocking_results(self):
@@ -266,7 +267,7 @@ class TestScheduledJobRegistry(RQTestCase):
         self.assertGreaterEqual(blocked_for, timeout)
 
         # Shouldn't block if there's already a result present.
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=1)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=1)
         timeout = 1
         result_sync = Result.fetch_latest(job)
         started_at = time.time()
@@ -276,6 +277,6 @@ class TestScheduledJobRegistry(RQTestCase):
         self.assertGreater(timeout, blocked_for)
 
         # Should return the latest result if there are multiple.
-        Result.create(job, Result.Type.SUCCESSFUL, ttl=10, return_value=2)
+        Result.create(job, ResultType.SUCCESSFUL, ttl=10, return_value=2)
         result_blocking = Result.fetch_latest(job, timeout=1)
         self.assertEqual(result_blocking.return_value, 2)
