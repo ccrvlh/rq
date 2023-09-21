@@ -24,7 +24,7 @@ from rq.registry import ScheduledJobRegistry
 from rq.serializers import resolve_serializer
 
 
-class RQScheduler:
+class Scheduler:
     # STARTED: scheduler has been started but sleeping
     # WORKING: scheduler is in the midst of scheduling jobs
     # STOPPED: scheduler is in stopped condition

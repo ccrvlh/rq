@@ -7,6 +7,7 @@
 - Moved worker `Enums` to `const`
 - Added first draft of `ThreadPoolWorker` (beta)
 - Added first draft of main `RQ` class
+- Rename `RQScheduler` to `Scheduler`
 
 ### RQ 1.15.1 (2023-06-20)
 

@@ -148,9 +148,9 @@ class Queue:
 
     @property
     def scheduler_pid(self) -> Optional[int]:
-        from rq.scheduler import RQScheduler
+        from rq.scheduler import Scheduler
 
-        pid = self.connection.get(RQScheduler.get_locking_key(self.name))
+        pid = self.connection.get(Scheduler.get_locking_key(self.name))
         return int(pid.decode()) if pid is not None else None
 
     @property

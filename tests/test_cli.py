@@ -20,7 +20,7 @@ from rq.job import Job
 from rq.job import JobStatus
 from rq.registry import FailedJobRegistry
 from rq.registry import ScheduledJobRegistry
-from rq.scheduler import RQScheduler
+from rq.scheduler import Scheduler
 from rq.serializers import JSONSerializer
 from rq.timeouts import UnixSignalDeathPenalty
 from rq.worker import WorkerStatus
@@ -520,7 +520,7 @@ class TestRQCli(CLITestCase):
         queue = Queue(connection=self.connection)
         registry = ScheduledJobRegistry(queue=queue)
         worker = ForkWorker(queue)
-        scheduler = RQScheduler(queue, self.connection)
+        scheduler = Scheduler(queue, self.connection)
 
         self.assertTrue(len(queue) == 0)
         self.assertTrue(len(registry) == 0)
@@ -557,7 +557,7 @@ class TestRQCli(CLITestCase):
         queue = Queue(connection=self.connection)
         registry = ScheduledJobRegistry(queue=queue)
         worker = ForkWorker(queue)
-        scheduler = RQScheduler(queue, self.connection)
+        scheduler = Scheduler(queue, self.connection)
 
         self.assertTrue(len(queue) == 0)
         self.assertTrue(len(registry) == 0)

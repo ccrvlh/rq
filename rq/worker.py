@@ -59,7 +59,7 @@ from rq.logutils import blue, green, setup_loghandlers, yellow
 from rq.maintenance import clean_intermediate_queue
 from rq.registry import clean_registries
 from rq.registry import StartedJobRegistry
-from rq.scheduler import RQScheduler
+from rq.scheduler import Scheduler
 from rq.serializers import resolve_serializer
 from rq.suspension import is_suspended
 from rq.timeouts import HorseMonitorTimeoutException, TimerDeathPenalty
@@ -185,7 +185,7 @@ class BaseWorker:
         self.total_working_time: float = 0
         self.current_job_working_time: float = 0
         self.birth_date = None
-        self.scheduler: Optional[RQScheduler] = None
+        self.scheduler: Optional[Scheduler] = None
         self.pubsub: Optional['PubSub'] = None
         self.pubsub_thread = None
         self._dequeue_strategy: DequeueStrategy = DequeueStrategy.DEFAULT
@@ -371,7 +371,7 @@ class BaseWorker:
     ):
         """Starts the scheduler process.
         This is specifically designed to be run by the worker when running the `work()` method.
-        Instanciates the RQScheduler and tries to acquire a lock.
+        Instanciates the Scheduler and tries to acquire a lock.
         If the lock is acquired, start scheduler.
         If worker is on burst mode just enqueues scheduled jobs and quits,
         otherwise, starts the scheduler in a separate process.
@@ -382,7 +382,7 @@ class BaseWorker:
             date_format (str, optional): Date Format. Defaults to DEFAULT_LOGGING_DATE_FORMAT.
             log_format (str, optional): Log Format. Defaults to DEFAULT_LOGGING_FORMAT.
         """
-        self.scheduler = RQScheduler(
+        self.scheduler = Scheduler(
             self.queues,
             connection=self.connection,
             logging_level=logging_level,

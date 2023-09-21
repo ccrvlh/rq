@@ -10,7 +10,7 @@ from rq.defaults import DEFAULT_MAINTENANCE_TASK_INTERVAL
 from rq.exceptions import NoSuchJobError
 from rq.job import Job, Retry
 from rq.registry import FinishedJobRegistry, ScheduledJobRegistry
-from rq.scheduler import RQScheduler
+from rq.scheduler import Scheduler
 from rq.serializers import JSONSerializer
 from rq.utils import current_timestamp
 from rq.worker import ForkWorker
@@ -133,14 +133,14 @@ class TestScheduler(RQTestCase):
     def test_init(self):
         """Scheduler can be instantiated with queues or queue names"""
         foo_queue = Queue('foo', connection=self.testconn)
-        scheduler = RQScheduler([foo_queue, 'bar'], connection=self.testconn)
+        scheduler = Scheduler([foo_queue, 'bar'], connection=self.testconn)
         self.assertEqual(scheduler._queue_names, {'foo', 'bar'})
-        self.assertEqual(scheduler.status, RQScheduler.Status.STOPPED)
+        self.assertEqual(scheduler.status, Scheduler.Status.STOPPED)
 
     def test_should_reacquire_locks(self):
         """scheduler.should_reacquire_locks works properly"""
         queue = Queue(connection=self.testconn)
-        scheduler = RQScheduler([queue], connection=self.testconn)
+        scheduler = Scheduler([queue], connection=self.testconn)
         self.assertTrue(scheduler.should_reacquire_locks)
         scheduler.acquire_locks()
         self.assertIsNotNone(scheduler.lock_acquisition_time)
@@ -161,14 +161,14 @@ class TestScheduler(RQTestCase):
         name_1 = 'lock-test-1'
         name_2 = 'lock-test-2'
         name_3 = 'lock-test-3'
-        scheduler = RQScheduler([name_1], self.testconn)
+        scheduler = Scheduler([name_1], self.testconn)
 
         self.assertEqual(scheduler.acquire_locks(), {name_1})
         self.assertEqual(scheduler._acquired_locks, {name_1})
         self.assertEqual(scheduler.acquire_locks(), set([]))
 
         # Only name_2 is returned since name_1 is already locked
-        scheduler = RQScheduler([name_1, name_2], self.testconn)
+        scheduler = Scheduler([name_1, name_2], self.testconn)
         self.assertEqual(scheduler.acquire_locks(), {name_2})
         self.assertEqual(scheduler._acquired_locks, {name_2})
 
@@ -179,7 +179,7 @@ class TestScheduler(RQTestCase):
 
     def test_lock_acquisition_with_auto_start(self):
         """Test lock acquisition with auto_start=True"""
-        scheduler = RQScheduler(['auto-start'], self.testconn)
+        scheduler = Scheduler(['auto-start'], self.testconn)
         with mock.patch.object(scheduler, 'start') as mocked:
             scheduler.acquire_locks(auto_start=True)
             self.assertEqual(mocked.call_count, 1)
@@ -187,7 +187,7 @@ class TestScheduler(RQTestCase):
         # If process has started, scheduler.start() won't be called
         running_process = mock.MagicMock()
         running_process.is_alive.return_value = True
-        scheduler = RQScheduler(['auto-start2'], self.testconn)
+        scheduler = Scheduler(['auto-start2'], self.testconn)
         scheduler._process = running_process
         with mock.patch.object(scheduler, 'start') as mocked:
             scheduler.acquire_locks(auto_start=True)
@@ -195,7 +195,7 @@ class TestScheduler(RQTestCase):
             self.assertEqual(running_process.is_alive.call_count, 1)
 
         # If the process has stopped for some reason, the scheduler should restart
-        scheduler = RQScheduler(['auto-start3'], self.testconn)
+        scheduler = Scheduler(['auto-start3'], self.testconn)
         stopped_process = mock.MagicMock()
         stopped_process.is_alive.return_value = False
         scheduler._process = stopped_process
@@ -208,13 +208,13 @@ class TestScheduler(RQTestCase):
         """Test that scheduler.release_locks() only releases acquired locks"""
         name_1 = 'lock-test-1'
         name_2 = 'lock-test-2'
-        scheduler_1 = RQScheduler([name_1], self.testconn)
+        scheduler_1 = Scheduler([name_1], self.testconn)
 
         self.assertEqual(scheduler_1.acquire_locks(), {name_1})
         self.assertEqual(scheduler_1._acquired_locks, {name_1})
 
         # Only name_2 is returned since name_1 is already locked
-        scheduler_1_2 = RQScheduler([name_1, name_2], self.testconn)
+        scheduler_1_2 = Scheduler([name_1, name_2], self.testconn)
         self.assertEqual(scheduler_1_2.acquire_locks(), {name_2})
         self.assertEqual(scheduler_1_2._acquired_locks, {name_2})
 
@@ -233,7 +233,7 @@ class TestScheduler(RQTestCase):
 
     def test_queue_scheduler_pid(self):
         queue = Queue(connection=self.testconn)
-        scheduler = RQScheduler(
+        scheduler = Scheduler(
             [
                 queue,
             ],
@@ -247,14 +247,14 @@ class TestScheduler(RQTestCase):
         name_1 = 'lock-test-1'
         name_2 = 'lock-test-2'
         name_3 = 'lock-test-3'
-        scheduler = RQScheduler([name_3], self.testconn)
+        scheduler = Scheduler([name_3], self.testconn)
         scheduler.acquire_locks()
-        scheduler = RQScheduler([name_1, name_2, name_3], self.testconn)
+        scheduler = Scheduler([name_1, name_2, name_3], self.testconn)
         scheduler.acquire_locks()
 
-        locking_key_1 = RQScheduler.get_locking_key(name_1)
-        locking_key_2 = RQScheduler.get_locking_key(name_2)
-        locking_key_3 = RQScheduler.get_locking_key(name_3)
+        locking_key_1 = Scheduler.get_locking_key(name_1)
+        locking_key_2 = Scheduler.get_locking_key(name_2)
+        locking_key_3 = Scheduler.get_locking_key(name_3)
 
         with self.testconn.pipeline() as pipeline:
             pipeline.expire(locking_key_1, 1000)
@@ -276,7 +276,7 @@ class TestScheduler(RQTestCase):
         self.assertEqual(scheduler.status, scheduler.Status.STOPPED)
 
         # Heartbeat also works properly for schedulers with a single queue
-        scheduler = RQScheduler([name_1], self.testconn)
+        scheduler = Scheduler([name_1], self.testconn)
         scheduler.acquire_locks()
         self.testconn.expire(locking_key_1, 1000)
         scheduler.heartbeat()
@@ -289,7 +289,7 @@ class TestScheduler(RQTestCase):
         job = Job.create('myfunc', connection=self.testconn)
         job.save()
         registry.schedule(job, datetime(2019, 1, 1, tzinfo=timezone.utc))
-        scheduler = RQScheduler([queue], connection=self.testconn)
+        scheduler = Scheduler([queue], connection=self.testconn)
         scheduler.acquire_locks()
         scheduler.enqueue_scheduled_jobs()
         self.assertEqual(len(queue), 1)
@@ -306,7 +306,7 @@ class TestScheduler(RQTestCase):
         """prepare_registries() creates self._scheduled_job_registries"""
         foo_queue = Queue('foo', connection=self.testconn)
         bar_queue = Queue('bar', connection=self.testconn)
-        scheduler = RQScheduler([foo_queue, bar_queue], connection=self.testconn)
+        scheduler = Scheduler([foo_queue, bar_queue], connection=self.testconn)
         self.assertEqual(scheduler._scheduled_job_registries, [])
         scheduler.prepare_registries([foo_queue.name])
         self.assertEqual(scheduler._scheduled_job_registries, [ScheduledJobRegistry(queue=foo_queue)])
@@ -330,7 +330,7 @@ class TestWorker(RQTestCase):
         self.assertIsNotNone(worker.scheduler)
         self.assertIsNone(self.testconn.get(worker.scheduler.get_locking_key('default')))
 
-    @mock.patch.object(RQScheduler, 'acquire_locks')
+    @mock.patch.object(Scheduler, 'acquire_locks')
     def test_run_maintenance_tasks(self, mocked):
         """scheduler.acquire_locks() is called only when scheduled is enabled"""
         queue = Queue(connection=self.testconn)
@@ -341,7 +341,7 @@ class TestWorker(RQTestCase):
 
         # if scheduler object exists and it's a first start, acquire locks should not run
         worker.last_cleaned_at = None
-        worker.scheduler = RQScheduler([queue], connection=self.testconn)
+        worker.scheduler = Scheduler([queue], connection=self.testconn)
         worker.run_maintenance_tasks()
         self.assertEqual(mocked.call_count, 0)
 
@@ -412,7 +412,7 @@ class TestQueue(RQTestCase):
         """queue.enqueue_at() puts job in the scheduled"""
         queue = Queue(connection=self.testconn)
         registry = ScheduledJobRegistry(queue=queue)
-        scheduler = RQScheduler([queue], connection=self.testconn)
+        scheduler = Scheduler([queue], connection=self.testconn)
         scheduler.acquire_locks()
         # Jobs created using enqueue_at is put in the ScheduledJobRegistry
         job = queue.enqueue_at(datetime(2019, 1, 1, tzinfo=timezone.utc), say_hello)
@@ -433,7 +433,7 @@ class TestQueue(RQTestCase):
         of the queue when the time comes for the job to be scheduled"""
         queue = Queue(connection=self.testconn)
         registry = ScheduledJobRegistry(queue=queue)
-        scheduler = RQScheduler([queue], connection=self.testconn)
+        scheduler = Scheduler([queue], connection=self.testconn)
         scheduler.acquire_locks()
         # Jobs created using enqueue_at is put in the ScheduledJobRegistry
         # job_first should be enqueued first
@@ -487,7 +487,7 @@ class TestQueue(RQTestCase):
         )
 
         queue = Queue(connection=custom_conn)
-        scheduler = RQScheduler([queue], connection=custom_conn)
+        scheduler = Scheduler([queue], connection=custom_conn)
 
         scheduler_connection = scheduler.connection.connection_pool.get_connection('info')
 
@@ -500,7 +500,7 @@ class TestQueue(RQTestCase):
         standard_conn = redis.Redis(db=5)
 
         queue = Queue(connection=standard_conn)
-        scheduler = RQScheduler([queue], connection=standard_conn)
+        scheduler = Scheduler([queue], connection=standard_conn)
 
         scheduler_connection = scheduler.connection.connection_pool.get_connection('info')
 
