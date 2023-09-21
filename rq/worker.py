@@ -116,8 +116,7 @@ class BaseWorker:
         job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL,
         disable_default_exception_handler: bool = False,
         prepare_for_work: bool = True,
-        serializer=None,
-        work_horse_killed_handler: Optional[Callable[[Job, int, int, 'struct_rusage'], None]] = None,
+        serializer=None
     ):  # noqa
         self.default_result_ttl = default_result_ttl
         self.worker_ttl = default_worker_ttl
@@ -152,7 +151,6 @@ class BaseWorker:
         self.validate_queues()
         self._ordered_queues = self.queues[:]
         self._exc_handlers: List[Callable] = []
-        self._work_horse_killed_handler = work_horse_killed_handler
         self._shutdown_requested_date: Optional[datetime] = None
 
         self._state: str = 'starting'
@@ -1348,9 +1346,10 @@ class Worker(BaseWorker):
 
 class ForkWorker(BaseWorker):
     def __init__(self, queues, name: str | None = None, default_result_ttl=DEFAULT_RESULT_TTL, connection: Redis | None = None, exc_handler=None, exception_handlers=None, default_worker_ttl=DEFAULT_WORKER_TTL, maintenance_interval: int = DEFAULT_MAINTENANCE_TASK_INTERVAL, job_class: type[Job] | None = None, queue_class: type[Queue] | None = None, log_job_description: bool = True, job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL, disable_default_exception_handler: bool = False, prepare_for_work: bool = True, serializer=None, work_horse_killed_handler: Callable[[Job, int, int, struct_rusage], None] | None = None):
-        super().__init__(queues, name, default_result_ttl, connection, exc_handler, exception_handlers, default_worker_ttl, maintenance_interval, job_class, queue_class, log_job_description, job_monitoring_interval, disable_default_exception_handler, prepare_for_work, serializer, work_horse_killed_handler)
+        super().__init__(queues, name, default_result_ttl, connection, exc_handler, exception_handlers, default_worker_ttl, maintenance_interval, job_class, queue_class, log_job_description, job_monitoring_interval, disable_default_exception_handler, prepare_for_work, serializer)
         self._is_horse: bool = False
         self._horse_pid: int = 0
+        self._work_horse_killed_handler = work_horse_killed_handler
 
     @property
     def horse_pid(self):
