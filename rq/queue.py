@@ -3,30 +3,37 @@ import sys
 import traceback
 import uuid
 import warnings
+
 from collections import namedtuple
 from datetime import datetime, timedelta, timezone
 from functools import total_ordering
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Type, Union
-
 from redis import WatchError
 
-from .timeouts import BaseDeathPenalty, UnixSignalDeathPenalty
+from rq import utils
+from rq.timeouts import BaseDeathPenalty
+from rq.timeouts import UnixSignalDeathPenalty
+
+from rq.connections import resolve_connection
+from rq.defaults import DEFAULT_RESULT_TTL
+from rq.dependency import Dependency
+from rq.exceptions import DequeueTimeout
+from rq.exceptions import NoSuchJobError
+from rq.job import Callback
+from rq.job import Job
+from rq.job import JobStatus
+from rq.logutils import blue
+from rq.logutils import green
+from rq.serializers import resolve_serializer
+from rq.types import JobDependencyType
+from rq.types import FunctionReferenceType
+
 
 if TYPE_CHECKING:
     from redis import Redis
     from redis.client import Pipeline
+    from rq.job import Retry
 
-    from .job import Retry
-
-from .connections import resolve_connection
-from .defaults import DEFAULT_RESULT_TTL
-from .dependency import Dependency
-from .exceptions import DequeueTimeout, NoSuchJobError
-from .job import Callback, Job, JobStatus
-from .logutils import blue, green
-from .serializers import resolve_serializer
-from .types import FunctionReferenceType, JobDependencyType
-from .utils import as_text, backend_class, compact, get_version, import_attribute, parse_timeout, utcnow
 
 logger = logging.getLogger("rq.queue")
 
@@ -64,10 +71,19 @@ class EnqueueData(
 @total_ordering
 class Queue:
     job_class: Type['Job'] = Job
+    """The default job class to use (defaults to `rq.job.Job`)."""
+
     death_penalty_class: Type[BaseDeathPenalty] = UnixSignalDeathPenalty
-    DEFAULT_TIMEOUT: int = 180  # Default timeout seconds.
+    """The default death penalty class to use (defaults to `rq.timeouts.UnixSignalDeathPenalty`)."""
+
+    DEFAULT_TIMEOUT: int = 180
+    """Default timeout (in seconds) to wait for a job when dequeueing."""
+
     redis_queue_namespace_prefix: str = 'rq:queue:'
+    """Prefix for all Redis keys related to Queue."""
+
     redis_queues_keys: str = 'rq:queues'
+    """Redis key that contains a list of all queues."""
 
     @classmethod
     def all(
@@ -92,7 +108,7 @@ class Queue:
 
         def to_queue(queue_key: Union[bytes, str]):
             return cls.from_queue_key(
-                as_text(queue_key),
+                utils.as_text(queue_key),
                 connection=connection,
                 job_class=job_class,
                 serializer=serializer,
@@ -182,7 +198,7 @@ class Queue:
         prefix = self.redis_queue_namespace_prefix
         self.name = name
         self._key = '{0}{1}'.format(prefix, name)
-        self._default_timeout = parse_timeout(default_timeout) or self.DEFAULT_TIMEOUT
+        self._default_timeout = utils.parse_timeout(default_timeout) or self.DEFAULT_TIMEOUT
         self._is_async = is_async
         self.log = logger
 
@@ -193,7 +209,7 @@ class Queue:
         # override class attribute job_class if one was passed
         if job_class is not None:
             if isinstance(job_class, str):
-                job_class = import_attribute(job_class)
+                job_class = utils.import_attribute(job_class)
             self.job_class = job_class
         self.death_penalty_class = death_penalty_class  # type: ignore
 
@@ -216,7 +232,7 @@ class Queue:
             redis_version (Tuple): A tuple with the parsed Redis version (eg: (5,0,0))
         """
         if not self.redis_server_version:
-            self.redis_server_version = get_version(self.connection)
+            self.redis_server_version = utils.get_version(self.connection)
         return self.redis_server_version
 
     @property
@@ -235,7 +251,7 @@ class Queue:
         return 'rq:clean_registries:%s' % self.name
 
     @property
-    def scheduler_pid(self) -> int:
+    def scheduler_pid(self) -> Optional[int]:
         from rq.scheduler import RQScheduler
 
         pid = self.connection.get(RQScheduler.get_locking_key(self.name))
@@ -375,7 +391,7 @@ class Queue:
             end = offset + (length - 1)
         else:
             end = length
-        job_ids = [as_text(job_id) for job_id in self.connection.lrange(self.key, start, end)]
+        job_ids = [utils.as_text(job_id) for job_id in self.connection.lrange(self.key, start, end)]
         self.log.debug('Getting jobs for queue %s: %d found.', green(self.name), len(job_ids))
         return job_ids
 
@@ -390,7 +406,7 @@ class Queue:
             _type_: _description_
         """
         job_ids = self.get_job_ids(offset, length)
-        return compact([self.fetch_job(job_id) for job_id in job_ids])
+        return utils.compact([self.fetch_job(job_id) for job_id in job_ids])
 
     @property
     def job_ids(self) -> List[str]:
@@ -478,7 +494,7 @@ class Queue:
             job_id = self.connection.lpop(COMPACT_QUEUE)
             if job_id is None:
                 break
-            if self.job_class.exists(as_text(job_id), self.connection):
+            if self.job_class.exists(utils.as_text(job_id), self.connection):
                 self.connection.rpush(self.key, job_id)
 
     def push_job_id(self, job_id: str, pipeline: Optional['Pipeline'] = None, at_front: bool = False):
@@ -550,17 +566,17 @@ class Queue:
         Returns:
             Job: The created job
         """
-        timeout = parse_timeout(timeout)
+        timeout = utils.parse_timeout(timeout)
 
         if timeout is None:
             timeout = self._default_timeout
         elif timeout == 0:
             raise ValueError('0 timeout is not allowed. Use -1 for infinite timeout')
 
-        result_ttl = parse_timeout(result_ttl)
-        failure_ttl = parse_timeout(failure_ttl)
+        result_ttl = utils.parse_timeout(result_ttl)
+        failure_ttl = utils.parse_timeout(failure_ttl)
 
-        ttl = parse_timeout(ttl)
+        ttl = utils.parse_timeout(ttl)
         if ttl is not None and ttl <= 0:
             raise ValueError('Job ttl must be greater than 0')
 
@@ -1117,7 +1133,7 @@ class Queue:
         job.set_status(JobStatus.QUEUED, pipeline=pipe)
 
         job.origin = self.name
-        job.enqueued_at = utcnow()
+        job.enqueued_at = utils.utcnow()
 
         if job.timeout is None:
             job.timeout = self._default_timeout
@@ -1190,7 +1206,7 @@ class Queue:
                 if pipeline is None:
                     pipe.watch(dependents_key)
 
-                dependent_job_ids = {as_text(_id) for _id in pipe.smembers(dependents_key)}
+                dependent_job_ids = {utils.as_text(_id) for _id in pipe.smembers(dependents_key)}
 
                 # There's no dependents
                 if not dependent_job_ids:
@@ -1254,7 +1270,7 @@ class Queue:
         Returns:
             job_id (str): The job id
         """
-        return as_text(self.connection.lpop(self.key))
+        return utils.as_text(self.connection.lpop(self.key))
 
     @classmethod
     def lpop(cls, queue_keys: List[str], timeout: Optional[int], connection: Optional['Redis'] = None):
@@ -1356,17 +1372,17 @@ class Queue:
         Returns:
             job, queue (Tuple[Job, Queue]): A tuple of Job, Queue
         """
-        job_cls: Type[Job] = backend_class(cls, 'job_class', override=job_class)  # type: ignore
+        job_cls: Type[Job] = utils.backend_class(cls, 'job_class', override=job_class)  # type: ignore
 
         while True:
             queue_keys = [q.key for q in queues]
-            if len(queue_keys) == 1 and get_version(connection) >= (6, 2, 0):
+            if len(queue_keys) == 1 and utils.get_version(connection) >= (6, 2, 0):
                 result = cls.lmove(connection, queue_keys[0], timeout)
             else:
                 result = cls.lpop(queue_keys, timeout, connection=connection)
             if result is None:
                 return None
-            queue_key, job_id = map(as_text, result)
+            queue_key, job_id = map(utils.as_text, result)
             queue = cls.from_queue_key(
                 queue_key,
                 connection=connection,
