@@ -56,7 +56,6 @@ from rq.job import Job
 from rq.job import JobStatus
 from rq.queue import Queue
 from rq.logutils import blue, green, setup_loghandlers, yellow
-from rq.maintenance import clean_intermediate_queue
 from rq.registry import clean_registries
 from rq.registry import StartedJobRegistry
 from rq.scheduler import Scheduler
@@ -606,7 +605,7 @@ class BaseWorker:
                 self.log.info('Cleaning registries for queue: %s', queue.name)
                 clean_registries(queue)
                 BaseWorker.clean_worker_registry(queue)
-                clean_intermediate_queue(self, queue)
+                self.clean_intermediate_queue(self, queue)
         self.last_cleaned_at = utils.utcnow()
 
     def get_redis_server_version(self):
@@ -1239,6 +1238,24 @@ class BaseWorker:
         pipeline.hincrbyfloat(self.key, 'total_working_time', job_execution_time.total_seconds())
 
     # Class & Dunder
+    @staticmethod
+    def clean_intermediate_queue(worker: 'BaseWorker', queue: Queue) -> None:
+        """
+        Check whether there are any jobs stuck in the intermediate queue.
+
+        A job may be stuck in the intermediate queue if a worker has successfully dequeued a job
+        but was not able to push it to the StartedJobRegistry. This may happen in rare cases
+        of hardware or network failure.
+
+        We consider a job to be stuck in the intermediate queue if it doesn't exist in the StartedJobRegistry.
+        """
+        job_ids = [utils.as_text(job_id) for job_id in queue.connection.lrange(queue.intermediate_queue_key, 0, -1)]
+        for job_id in job_ids:
+            if job_id not in queue.started_job_registry:
+                job = queue.fetch_job(job_id)
+                if job:
+                    worker.handle_job_failure(job, queue, exc_string='Job was stuck in intermediate queue.')
+                queue.connection.lrem(queue.intermediate_queue_key, 1, job_id)
 
     @staticmethod
     def register(worker: 'BaseWorker', pipeline: Optional['Pipeline'] = None):
