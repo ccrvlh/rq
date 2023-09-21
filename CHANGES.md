@@ -1,10 +1,12 @@
 ### RQ 2.0.0-a0 (2023-09-21)
 
-- Dropped support for Python 3.6
+- Dropped support for Python 3.6 and Python 3.7
 - Change the default worker to `rq.Worker` (formerly `SimpleWorker`), with a non-forking behavior
 - Added the `ForkWorker` (formerly `Worker`). This is the default worker in RQ 1.x
 - Removed `RoundRobinWorker` and `RandomWorker` classes
 - Moved worker `Enums` to `const`
+- Added first draft of `ThreadPoolWorker` (beta)
+- Added first draft of main `RQ` class
 
 ### RQ 1.15.1 (2023-06-20)
 

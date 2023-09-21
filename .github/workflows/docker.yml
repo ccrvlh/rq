@@ -2,10 +2,9 @@ name: Docker
 
 on:
   push:
-    branches: [ master ]
-    tags: [ '*' ]
+    branches: [master]
+    tags: ["*"]
   workflow_dispatch:
-
 
 permissions:
   contents: write # to fetch code (actions/checkout)
@@ -36,7 +35,7 @@ jobs:
             done
             VERSIONS="$VERSIONS latest"
           }
-          
+
           echo Building with tags: $VERSIONS
 
           # Login to registries
