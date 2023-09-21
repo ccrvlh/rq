@@ -34,9 +34,7 @@ class PikleSerializer(SerializerInterface):
         return pickle.loads(s, *args, **kwargs)
 
 
-class DefaultSerializer:
-    dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
-    loads = pickle.loads
+DefaultSerializer = PikleSerializer
 
 
 class JSONSerializer:
@@ -71,6 +69,6 @@ def resolve_serializer(serializer: Optional[Union[Type[SerializerInterface], str
 
     for instance_method in default_serializer_methods:
         if not hasattr(serializer, instance_method):
-            raise NotImplementedError('Serializer should have (dumps, loads) methods.')
+            raise NotImplementedError('Serializer should implement (dumps, loads) methods.')
 
     return serializer

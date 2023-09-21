@@ -13,6 +13,7 @@ from redis import Redis
 from redis import ConnectionPool
 
 from rq import utils
+from rq.serializers import SerializerInterface
 from rq.serializers import DefaultSerializer
 from rq.connections import parse_connection
 from rq.defaults import DEFAULT_LOGGING_DATE_FORMAT
@@ -42,7 +43,7 @@ class WorkerPool:
         connection: Redis,
         num_workers: int = 1,
         worker_class: Type[BaseWorker] = ForkWorker,
-        serializer: Type[DefaultSerializer] = DefaultSerializer,
+        serializer: Type[SerializerInterface] = DefaultSerializer,
         job_class: Type[Job] = Job,
         *args,
         **kwargs,
@@ -59,7 +60,7 @@ class WorkerPool:
         self._sleep: int = 0
         self.status: self.Status = self.Status.IDLE  # type: ignore
         self.worker_class: Type[BaseWorker] = worker_class
-        self.serializer: Type[DefaultSerializer] = serializer
+        self.serializer: Type[SerializerInterface] = serializer
         self.job_class: Type[Job] = job_class
 
         # A dictionary of WorkerData keyed by worker name
