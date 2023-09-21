@@ -12,6 +12,7 @@
 - Remove `Local`
   - TODO: Current Job
 - Reorganize `Job` & `Results`
+- Drop Redis <= 5.0 support
 
 ### RQ 1.15.1 (2023-06-20)
 
