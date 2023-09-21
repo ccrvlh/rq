@@ -10,36 +10,27 @@ import sys
 import time
 import traceback
 import warnings
-from datetime import datetime, timedelta
-from enum import Enum
-from random import shuffle
-from types import FrameType
-from typing import TYPE_CHECKING, Callable, List, Optional, Tuple, Type, Union
-from uuid import uuid4
-
-from redis import Redis
-
-if TYPE_CHECKING:
-    try:
-        from resource import struct_rusage
-    except ImportError:
-        pass
-    from redis import Redis
-    from redis.client import Pipeline, PubSub
-
-try:
-    from signal import SIGKILL
-except ImportError:
-    from signal import SIGTERM as SIGKILL
-
-from contextlib import suppress
-
 import redis.exceptions
 
-from . import worker_registration
-from .command import PUBSUB_CHANNEL_TEMPLATE, handle_command, parse_payload
-from .connections import get_current_connection, pop_connection, push_connection
-from .defaults import (
+from datetime import datetime
+from datetime import timedelta
+from random import shuffle
+from types import FrameType
+from typing import TYPE_CHECKING
+from typing import Union
+from typing import Type
+from typing import Tuple
+from typing import Optional
+from typing import List
+from typing import Callable
+from uuid import uuid4
+from redis import Redis
+from contextlib import suppress
+
+from rq import worker_registration
+from rq.command import PUBSUB_CHANNEL_TEMPLATE, handle_command, parse_payload
+from rq.connections import get_current_connection, pop_connection, push_connection
+from rq.defaults import (
     DEFAULT_JOB_MONITORING_INTERVAL,
     DEFAULT_LOGGING_DATE_FORMAT,
     DEFAULT_LOGGING_FORMAT,
@@ -47,30 +38,46 @@ from .defaults import (
     DEFAULT_RESULT_TTL,
     DEFAULT_WORKER_TTL,
 )
-from .const import WorkerStatus
-from .const import DequeueStrategy
-from .exceptions import DequeueTimeout
-from .exceptions import DeserializationError
-from .exceptions import StopRequested
-from .job import Job, JobStatus
-from .job import Job
-from .logutils import blue, green, setup_loghandlers, yellow
-from .maintenance import clean_intermediate_queue
-from .queue import Queue
-from .registry import StartedJobRegistry, clean_registries
-from .scheduler import RQScheduler
-from .serializers import resolve_serializer
-from .suspension import is_suspended
-from .timeouts import HorseMonitorTimeoutException, JobTimeoutException, UnixSignalDeathPenalty
-from .utils import as_text, backend_class, compact, ensure_list, get_version, utcformat, utcnow, utcparse, signal_name
-from .version import VERSION
+from rq import utils
+from rq.version import VERSION
+from rq.const import WorkerStatus
+from rq.const import DequeueStrategy
+from rq.exceptions import DequeueTimeout
+from rq.exceptions import DeserializationError
+from rq.exceptions import StopRequested
+from rq.job import Job
+from rq.job import JobStatus
+from rq.queue import Queue
+from rq.logutils import blue, green, setup_loghandlers, yellow
+from rq.maintenance import clean_intermediate_queue
+from rq.registry import clean_registries
+from rq.registry import StartedJobRegistry
+from rq.scheduler import RQScheduler
+from rq.serializers import resolve_serializer
+from rq.suspension import is_suspended
+from rq.timeouts import HorseMonitorTimeoutException
+from rq.timeouts import JobTimeoutException
+from rq.timeouts import UnixSignalDeathPenalty
+
+try:
+    from signal import SIGKILL
+except ImportError:
+    from signal import SIGTERM as SIGKILL
 
 try:
     from setproctitle import setproctitle as setprocname
 except ImportError:
-
     def setprocname(*args, **kwargs):  # noqa
         pass
+
+if TYPE_CHECKING:
+    try:
+        from resource import struct_rusage
+    except ImportError:
+        pass
+    from redis import Redis
+    from redis.client import Pipeline
+    from redis.client import PubSub
 
 
 logger = logging.getLogger("rq.worker")
@@ -121,8 +128,8 @@ class BaseWorker:
         self.connection = connection
         self.redis_server_version = None
 
-        self.job_class = backend_class(self, 'job_class', override=job_class)
-        self.queue_class = backend_class(self, 'queue_class', override=queue_class)
+        self.job_class = utils.backend_class(self, 'job_class', override=job_class)
+        self.queue_class = utils.backend_class(self, 'queue_class', override=queue_class)
         self.version = VERSION
         self.python_version = sys.version
         self.serializer = resolve_serializer(serializer)
@@ -137,7 +144,7 @@ class BaseWorker:
             )
             if isinstance(q, str)
             else q
-            for q in ensure_list(queues)
+            for q in utils.ensure_list(queues)
         ]
 
         self.name: str = name or uuid4().hex
@@ -269,7 +276,7 @@ class BaseWorker:
             )
             for key in worker_keys
         ]
-        return compact(workers)
+        return utils.compact(workers)
 
     @classmethod
     def all_keys(cls, connection: Optional['Redis'] = None, queue: Optional['Queue'] = None) -> List[str]:
@@ -282,7 +289,7 @@ class BaseWorker:
         Returns:
             list_keys (List[str]): A list of worker keys
         """
-        return [as_text(key) for key in worker_registration.get_keys(queue=queue, connection=connection)]
+        return [utils.as_text(key) for key in worker_registration.get_keys(queue=queue, connection=connection)]
 
     @classmethod
     def count(cls, connection: Optional['Redis'] = None, queue: Optional['Queue'] = None) -> int:
@@ -334,32 +341,32 @@ class BaseWorker:
             version,
             python_version,
         ) = data
-        self.hostname = as_text(hostname) if hostname else None
-        self.ip_address = as_text(ip_address) if ip_address else None
+        self.hostname = utils.as_text(hostname) if hostname else None
+        self.ip_address = utils.as_text(ip_address) if ip_address else None
         self.pid = int(pid) if pid else None
-        self.version = as_text(version) if version else None
-        self.python_version = as_text(python_version) if python_version else None
-        self._state = as_text(state or '?')
+        self.version = utils.as_text(version) if version else None
+        self.python_version = utils.as_text(python_version) if python_version else None
+        self._state = utils.as_text(state or '?')
         self._job_id = job_id or None
         if last_heartbeat:
-            self.last_heartbeat = utcparse(as_text(last_heartbeat))
+            self.last_heartbeat = utils.utcparse(utils.as_text(last_heartbeat))
         else:
             self.last_heartbeat = None
         if birth:
-            self.birth_date = utcparse(as_text(birth))
+            self.birth_date = utils.utcparse(utils.as_text(birth))
         else:
             self.birth_date = None
         if failed_job_count:
-            self.failed_job_count = int(as_text(failed_job_count))
+            self.failed_job_count = int(utils.as_text(failed_job_count))
         if successful_job_count:
-            self.successful_job_count = int(as_text(successful_job_count))
+            self.successful_job_count = int(utils.as_text(successful_job_count))
         if total_working_time:
-            self.total_working_time = float(as_text(total_working_time))
+            self.total_working_time = float(utils.as_text(total_working_time))
         if current_job_working_time:
-            self.current_job_working_time = float(as_text(current_job_working_time))
+            self.current_job_working_time = float(utils.as_text(current_job_working_time))
 
         if queues:
-            queues = as_text(queues)
+            queues = utils.as_text(queues)
             self.queues = [
                 self.queue_class(
                     queue, connection=self.connection, job_class=self.job_class, serializer=self.serializer
@@ -372,7 +379,7 @@ class BaseWorker:
         """Maintenance tasks should run on first startup or every 10 minutes."""
         if self.last_cleaned_at is None:
             return True
-        if (utcnow() - self.last_cleaned_at) > timedelta(seconds=self.maintenance_interval):
+        if (utils.utcnow() - self.last_cleaned_at) > timedelta(seconds=self.maintenance_interval):
             return True
         return False
 
@@ -410,12 +417,12 @@ class BaseWorker:
                 clean_registries(queue)
                 worker_registration.clean_worker_registry(queue)
                 clean_intermediate_queue(self, queue)
-        self.last_cleaned_at = utcnow()
+        self.last_cleaned_at = utils.utcnow()
 
     def get_redis_server_version(self):
         """Return Redis server version of connection"""
         if not self.redis_server_version:
-            self.redis_server_version = get_version(self.connection)
+            self.redis_server_version = utils.get_version(self.connection)
         return self.redis_server_version
 
     def validate_queues(self):
@@ -676,7 +683,7 @@ class BaseWorker:
         result = connection.hget(self.key, 'current_job')
         if result is None:
             return None
-        return as_text(result)
+        return utils.as_text(result)
 
     def get_current_job(self) -> Optional['Job']:
         """Returns the currently executing job instance.
@@ -732,31 +739,31 @@ class BaseWorker:
             remove_from_intermediate_queue = len(self.queues) == 1
             self.prepare_job_execution(job, remove_from_intermediate_queue)
 
-            job.started_at = utcnow()
+            job.started_at = utils.utcnow()
             timeout = job.timeout or self.queue_class.DEFAULT_TIMEOUT
             with self.death_penalty_class(timeout, JobTimeoutException, job_id=job.id):
                 self.log.debug('Performing Job...')
                 rv = job.perform()
                 self.log.debug('Finished performing Job ID %s', job.id)
 
-            job.ended_at = utcnow()
+            job.ended_at = utils.utcnow()
 
             # Pickle the result in the same try-except block since we need
             # to use the same exc handling when pickling fails
             job._result = rv
 
-            job.heartbeat(utcnow(), job.success_callback_timeout)
+            job.heartbeat(utils.utcnow(), job.success_callback_timeout)
             job.execute_success_callback(self.death_penalty_class, rv)
 
             self.handle_job_success(job=job, queue=queue, started_job_registry=started_job_registry)
         except:  # NOQA
             self.log.debug('Job %s raised an exception.', job.id)
-            job.ended_at = utcnow()
+            job.ended_at = utils.utcnow()
             exc_info = sys.exc_info()
             exc_string = ''.join(traceback.format_exception(*exc_info))
 
             try:
-                job.heartbeat(utcnow(), job.failure_callback_timeout)
+                job.heartbeat(utils.utcnow(), job.failure_callback_timeout)
                 job.execute_failure_callback(self.death_penalty_class, *exc_info)
             except:  # noqa
                 exc_info = sys.exc_info()
@@ -773,7 +780,7 @@ class BaseWorker:
 
         self.log.info('%s: %s (%s)', green(job.origin), blue('Job OK'), job.id)
         if rv is not None:
-            self.log.debug('Result: %r', yellow(as_text(str(rv))))
+            self.log.debug('Result: %r', yellow(utils.as_text(str(rv))))
 
         if self.log_result_lifespan:
             result_ttl = job.get_result_ttl(self.default_result_ttl)
@@ -886,8 +893,8 @@ class BaseWorker:
         queues = ','.join(self.queue_names())
         with self.connection.pipeline() as p:
             p.delete(key)
-            now = utcnow()
-            now_in_string = utcformat(now)
+            now = utils.utcnow()
+            now_in_string = utils.utils.utcformat(now)
             self.birth_date = now
 
             mapping = {
@@ -917,7 +924,7 @@ class BaseWorker:
             # We cannot use self.state = 'dead' here, because that would
             # rollback the pipeline
             worker_registration.unregister(self, p)
-            p.hset(self.key, 'death', utcformat(utcnow()))
+            p.hset(self.key, 'death', utils.utcformat(utils.utcnow()))
             p.expire(self.key, 60)
             p.execute()
 
@@ -975,21 +982,21 @@ class BaseWorker:
 
     def set_shutdown_requested_date(self):
         """Sets the date on which the worker received a (warm) shutdown request"""
-        self.connection.hset(self.key, 'shutdown_requested_date', utcformat(self._shutdown_requested_date))
+        self.connection.hset(self.key, 'shutdown_requested_date', utils.utcformat(self._shutdown_requested_date))
 
     @property
     def shutdown_requested_date(self):
         """Fetches shutdown_requested_date from Redis."""
         shutdown_requested_timestamp = self.connection.hget(self.key, 'shutdown_requested_date')
         if shutdown_requested_timestamp is not None:
-            return utcparse(as_text(shutdown_requested_timestamp))
+            return utils.utcparse(utils.as_text(shutdown_requested_timestamp))
 
     @property
     def death_date(self):
         """Fetches death date from Redis."""
         death_timestamp = self.connection.hget(self.key, 'death')
         if death_timestamp is not None:
-            return utcparse(as_text(death_timestamp))
+            return utils.utcparse(utils.as_text(death_timestamp))
 
     def run_maintenance_tasks(self):
         """
@@ -1037,7 +1044,7 @@ class BaseWorker:
         self.procline('Listening on ' + qnames)
         self.log.debug('*** Listening on %s...', green(qnames))
         connection_wait_time = 1.0
-        idle_since = utcnow()
+        idle_since = utils.utcnow()
         idle_time_left = max_idle_time
         while True:
             try:
@@ -1071,7 +1078,7 @@ class BaseWorker:
                 break
             except DequeueTimeout:
                 if max_idle_time is not None:
-                    idle_for = (utcnow() - idle_since).total_seconds()
+                    idle_for = (utils.utcnow() - idle_since).total_seconds()
                     idle_time_left = math.ceil(max_idle_time - idle_for)
                     if idle_time_left <= 0:
                         break
@@ -1106,7 +1113,7 @@ class BaseWorker:
         timeout = timeout or self.worker_ttl + 60
         connection: Union[Redis, 'Pipeline'] = pipeline if pipeline is not None else self.connection
         connection.expire(self.key, timeout)
-        connection.hset(self.key, 'last_heartbeat', utcformat(utcnow()))
+        connection.hset(self.key, 'last_heartbeat', utils.utcformat(utils.utcnow()))
         self.log.debug('Sent heartbeat to prevent worker timeout. Next one should arrive in %s seconds.', timeout)
 
     def teardown(self):
@@ -1212,7 +1219,7 @@ class BaseWorker:
 
             heartbeat_ttl = self.get_heartbeat_ttl(job)
             self.heartbeat(heartbeat_ttl, pipeline=pipeline)
-            job.heartbeat(utcnow(), heartbeat_ttl, pipeline=pipeline)
+            job.heartbeat(utils.utcnow(), heartbeat_ttl, pipeline=pipeline)
 
             job.prepare_for_execution(self.name, pipeline=pipeline)
             if remove_from_intermediate_queue:
@@ -1244,8 +1251,8 @@ class BaseWorker:
             signum (Any): Signum
             frame (Any): Frame
         """
-        self.log.debug('Got signal %s', signal_name(signum))
-        self._shutdown_requested_date = utcnow()
+        self.log.debug('Got signal %s', utils.signal_name(signum))
+        self._shutdown_requested_date = utils.utcnow()
 
         signal.signal(signal.SIGINT, self.request_force_stop)
         signal.signal(signal.SIGTERM, self.request_force_stop)
@@ -1300,7 +1307,7 @@ class BaseWorker:
         with self.connection.pipeline() as pipeline:
             self.heartbeat(self.job_monitoring_interval + 60, pipeline=pipeline)
             ttl = self.get_heartbeat_ttl(job)
-            job.heartbeat(utcnow(), ttl, pipeline=pipeline, xx=True)
+            job.heartbeat(utils.utcnow(), ttl, pipeline=pipeline, xx=True)
             results = pipeline.execute()
             if results[2] == 1:
                 self.connection.delete(job.key)
@@ -1411,7 +1418,7 @@ class ForkWorker(BaseWorker):
             queue (Queue): _description_
         """
         retpid = ret_val = rusage = None
-        job.started_at = utcnow()
+        job.started_at = utils.utcnow()
         while True:
             try:
                 with self.death_penalty_class(self.job_monitoring_interval, HorseMonitorTimeoutException):
@@ -1420,7 +1427,7 @@ class ForkWorker(BaseWorker):
             except HorseMonitorTimeoutException:
                 # Horse has not exited yet and is still running.
                 # Send a heartbeat to keep the worker alive.
-                self.set_current_job_working_time((utcnow() - job.started_at).total_seconds())
+                self.set_current_job_working_time((utils.utcnow() - job.started_at).total_seconds())
 
                 # Kill the job from this side if something is really wrong (interpreter lock/etc).
                 if job.timeout != -1 and self.current_job_working_time > (job.timeout + 60):  # type: ignore
@@ -1460,7 +1467,7 @@ class ForkWorker(BaseWorker):
             self.handle_job_failure(job, queue=queue, exc_string='Job stopped by user, work-horse terminated.')
         elif job_status not in [JobStatus.FINISHED, JobStatus.FAILED]:
             if not job.ended_at:
-                job.ended_at = utcnow()
+                job.ended_at = utils.utcnow()
 
             # Unhandled failure: move the job to the failed queue
             signal_msg = f" (signal {os.WTERMSIG(ret_val)})" if ret_val and os.WIFSIGNALED(ret_val) else ''
@@ -1532,7 +1539,7 @@ class ForkWorker(BaseWorker):
         # One is sent by the pool when it calls `pool.stop_worker()` and another is sent by the OS
         # when user hits Ctrl+C. In this case if we receive the second signal within 1 second,
         # we ignore it.
-        if (utcnow() - self._shutdown_requested_date) < timedelta(seconds=1):  # type: ignore
+        if (utils.utcnow() - self._shutdown_requested_date) < timedelta(seconds=1):  # type: ignore
             self.log.debug('Shutdown signal ignored, received twice in less than 1 second')
             return
 
