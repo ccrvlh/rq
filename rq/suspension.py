@@ -1,12 +1,15 @@
 from typing import TYPE_CHECKING, Optional
 
+from rq.defaults import WORKERS_SUSPENDED
+
+
 if TYPE_CHECKING:
     from redis import Redis
 
     from rq.worker import BaseWorker
 
 
-WORKERS_SUSPENDED = 'rq:suspended'
+
 
 
 def is_suspended(connection: 'Redis', worker: Optional['BaseWorker'] = None):

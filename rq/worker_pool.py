@@ -4,22 +4,22 @@ import logging
 import os
 import signal
 import time
+
 from enum import Enum
 from multiprocessing import Process
 from typing import Dict, List, NamedTuple, Optional, Type, Union
 from uuid import uuid4
+from redis import Redis
+from redis import ConnectionPool
 
-from redis import ConnectionPool, Redis
-
+from rq import utils
 from rq.serializers import DefaultSerializer
-
-from .connections import parse_connection
-from .defaults import DEFAULT_LOGGING_DATE_FORMAT, DEFAULT_LOGGING_FORMAT
-from .job import Job
-from .logutils import setup_loghandlers
-from .queue import Queue
-from .utils import parse_names
-from .worker import BaseWorker, ForkWorker
+from rq.connections import parse_connection
+from rq.defaults import DEFAULT_LOGGING_DATE_FORMAT, DEFAULT_LOGGING_FORMAT
+from rq.job import Job
+from rq.logutils import setup_loghandlers
+from rq.queue import Queue
+from rq.worker import BaseWorker, ForkWorker
 
 
 class WorkerData(NamedTuple):
@@ -50,7 +50,7 @@ class WorkerPool:
         setup_loghandlers('INFO', DEFAULT_LOGGING_DATE_FORMAT, DEFAULT_LOGGING_FORMAT, name=__name__)
         self.log: logging.Logger = logging.getLogger(__name__)
         # self.log: logging.Logger = logger
-        self._queue_names: List[str] = parse_names(queues)
+        self._queue_names: List[str] = utils.parse_names(queues)
         self.connection = connection
         self.name: str = uuid4().hex
         self._burst: bool = True

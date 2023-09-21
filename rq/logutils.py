@@ -1,8 +1,10 @@
 import logging
 import sys
+
 from typing import Union
 
-from rq.defaults import DEFAULT_LOGGING_DATE_FORMAT, DEFAULT_LOGGING_FORMAT
+from rq.defaults import DEFAULT_LOGGING_DATE_FORMAT
+from rq.defaults import DEFAULT_LOGGING_FORMAT
 
 
 class _Colorizer:

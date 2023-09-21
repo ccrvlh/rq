@@ -1,15 +1,15 @@
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Type, Union
 
+from rq.defaults import DEFAULT_RESULT_TTL
+from rq.job import Callback
+from rq.queue import Queue
+from rq.utils import backend_class
+
+
 if TYPE_CHECKING:
     from redis import Redis
-
     from .job import Retry
-
-from .defaults import DEFAULT_RESULT_TTL
-from .job import Callback
-from .queue import Queue
-from .utils import backend_class
 
 
 class job:  # noqa

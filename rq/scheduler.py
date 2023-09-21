@@ -3,30 +3,25 @@ import os
 import signal
 import time
 import traceback
+
 from datetime import datetime
-from enum import Enum
 from multiprocessing import Process
 from typing import List, Set
+from redis import ConnectionPool
+from redis import Redis
 
-from redis import ConnectionPool, Redis
-
-from .connections import parse_connection
-from .defaults import DEFAULT_LOGGING_DATE_FORMAT, DEFAULT_LOGGING_FORMAT, DEFAULT_SCHEDULER_FALLBACK_PERIOD
-from .job import Job
-from .logutils import setup_loghandlers
-from .queue import Queue
-from .registry import ScheduledJobRegistry
-from .serializers import resolve_serializer
-from .utils import current_timestamp, parse_names
-
-SCHEDULER_KEY_TEMPLATE = 'rq:scheduler:%s'
-SCHEDULER_LOCKING_KEY_TEMPLATE = 'rq:scheduler-lock:%s'
-
-
-class SchedulerStatus(str, Enum):
-    STARTED = 'started'
-    WORKING = 'working'
-    STOPPED = 'stopped'
+from rq import utils
+from rq.job import Job
+from rq.queue import Queue
+from rq.connections import parse_connection
+from rq.defaults import DEFAULT_LOGGING_DATE_FORMAT
+from rq.defaults import DEFAULT_LOGGING_FORMAT
+from rq.defaults import DEFAULT_SCHEDULER_FALLBACK_PERIOD
+from rq.defaults import SCHEDULER_LOCKING_KEY_TEMPLATE
+from rq.const import SchedulerStatus
+from rq.logutils import setup_loghandlers
+from rq.registry import ScheduledJobRegistry
+from rq.serializers import resolve_serializer
 
 
 class RQScheduler:
@@ -46,7 +41,7 @@ class RQScheduler:
         log_format=DEFAULT_LOGGING_FORMAT,
         serializer=None,
     ):
-        self._queue_names = set(parse_names(queues))
+        self._queue_names = set(utils.parse_names(queues))
         self._acquired_locks: Set[str] = set()
         self._scheduled_job_registries: List[ScheduledJobRegistry] = []
         self.lock_acquisition_time = None
@@ -137,7 +132,7 @@ class RQScheduler:
             self.prepare_registries()
 
         for registry in self._scheduled_job_registries:
-            timestamp = current_timestamp()
+            timestamp = utils.current_timestamp()
 
             # TODO: try to use Lua script to make get_jobs_to_schedule()
             # and remove_jobs() atomic

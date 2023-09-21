@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Any, Callable, List, TypeVar, Union
 
 if TYPE_CHECKING:
-    from .job import Dependency, Job
+    from rq.job import Dependency, Job
 
 
 FunctionReferenceType = TypeVar('FunctionReferenceType', str, Callable[..., Any])

@@ -14,3 +14,9 @@ class WorkerStatus(str, Enum):
     BUSY = 'busy'
     IDLE = 'idle'
 
+
+
+class SchedulerStatus(str, Enum):
+    STARTED = 'started'
+    WORKING = 'working'
+    STOPPED = 'stopped'

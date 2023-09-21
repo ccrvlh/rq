@@ -3,7 +3,7 @@ from typing import List
 from redis.client import Pipeline
 from redis.exceptions import WatchError
 
-from .job import Job
+from rq.job import Job
 
 
 class Dependency:

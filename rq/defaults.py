@@ -100,3 +100,11 @@ UNSERIALIZABLE_RETURN_VALUE_PAYLOAD = 'Unserializable return value'
 """ The value that we store in the job's _result property or in the Result's return_value
 in case the return value of the actual job is not serializable
 """
+
+SCHEDULER_KEY_TEMPLATE = 'rq:scheduler:%s'
+SCHEDULER_LOCKING_KEY_TEMPLATE = 'rq:scheduler-lock:%s'
+WORKERS_SUSPENDED = 'rq:suspended'
+
+WORKERS_BY_QUEUE_KEY = 'rq:workers:%s'
+REDIS_WORKER_KEYS = 'rq:workers'
+MAX_KEYS = 1000

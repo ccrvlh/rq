@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
-from .queue import Queue
-from .utils import as_text
+from rq.queue import Queue
+from rq import utils
 
 if TYPE_CHECKING:
     from .worker import BaseWorker
@@ -17,7 +17,7 @@ def clean_intermediate_queue(worker: 'BaseWorker', queue: Queue) -> None:
 
     We consider a job to be stuck in the intermediate queue if it doesn't exist in the StartedJobRegistry.
     """
-    job_ids = [as_text(job_id) for job_id in queue.connection.lrange(queue.intermediate_queue_key, 0, -1)]
+    job_ids = [utils.as_text(job_id) for job_id in queue.connection.lrange(queue.intermediate_queue_key, 0, -1)]
     for job_id in job_ids:
         if job_id not in queue.started_job_registry:
             job = queue.fetch_job(job_id)

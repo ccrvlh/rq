@@ -1,15 +1,18 @@
 import zlib
-from base64 import b64decode, b64encode
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Optional
 
+from base64 import b64decode
+from base64 import b64encode
+from datetime import datetime
+from datetime import timezone
+from enum import Enum
+from typing import Any
+from typing import Optional
 from redis import Redis
 
-from .defaults import UNSERIALIZABLE_RETURN_VALUE_PAYLOAD
-from .job import Job
-from .serializers import resolve_serializer
-from .utils import decode_redis_hash, now
+from rq import utils
+from rq.job import Job
+from rq.defaults import UNSERIALIZABLE_RETURN_VALUE_PAYLOAD
+from rq.serializers import resolve_serializer
 
 
 def get_key(job_id):
@@ -36,7 +39,7 @@ class Result:
         self.return_value = return_value
         self.exc_string = exc_string
         self.type = type
-        self.created_at = created_at if created_at else now()
+        self.created_at = created_at if created_at else utils.now()
         self.serializer = resolve_serializer(serializer)
         self.connection = connection
         self.job_id = job_id
@@ -106,7 +109,7 @@ class Result:
     def restore(cls, job_id: str, result_id: str, payload: dict, connection: Redis, serializer=None) -> 'Result':
         """Create a Result object from given Redis payload"""
         created_at = datetime.fromtimestamp(int(result_id.split('-')[0]) / 1000, tz=timezone.utc)
-        payload = decode_redis_hash(payload)
+        payload = utils.decode_redis_hash(payload)
         # data, timestamp = payload
         # result_data = json.loads(data)
         # created_at = datetime.fromtimestamp(timestamp, tz=timezone.utc)

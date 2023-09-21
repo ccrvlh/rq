@@ -1,15 +1,16 @@
 import json
 import os
 import signal
+
 from typing import TYPE_CHECKING, Any, Dict
-
-if TYPE_CHECKING:
-    from redis import Redis
-
-    from .worker import ForkWorker
 
 from rq.exceptions import InvalidJobOperation
 from rq.job import Job
+
+if TYPE_CHECKING:
+    from redis import Redis
+    from rq.worker import ForkWorker
+
 
 PUBSUB_CHANNEL_TEMPLATE = 'rq:pubsub:%s'
 

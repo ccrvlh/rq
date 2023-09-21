@@ -1,9 +1,37 @@
 import json
 import pickle
-from functools import partial
-from typing import Optional, Type, Union
 
-from .utils import import_attribute
+from functools import partial
+from typing import Optional
+from typing import Type
+from typing import Union
+
+from rq import utils
+
+
+class SerializerInterface:
+    """Interface for serializer objects."""
+
+    @staticmethod
+    def dumps(*args, **kwargs):
+        """Serialize an object into a string."""
+        raise NotImplementedError
+
+    @staticmethod
+    def loads(s, *args, **kwargs):
+        """Deserialize a string into an object."""
+        raise NotImplementedError
+
+
+class PikleSerializer(SerializerInterface):
+    """Serializer that uses pickle to serialize objects."""
+    @staticmethod
+    def dumps(*args, **kwargs):
+        return pickle.dumps(*args, **kwargs, protocol=pickle.HIGHEST_PROTOCOL)
+
+    @staticmethod
+    def loads(s, *args, **kwargs):
+        return pickle.loads(s, *args, **kwargs)
 
 
 class DefaultSerializer:
@@ -37,7 +65,7 @@ def resolve_serializer(serializer: Optional[Union[Type[DefaultSerializer], str]]
         return DefaultSerializer
 
     if isinstance(serializer, str):
-        serializer = import_attribute(serializer)
+        serializer = utils.import_attribute(serializer)
 
     default_serializer_methods = ('dumps', 'loads')
 

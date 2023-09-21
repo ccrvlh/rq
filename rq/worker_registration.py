@@ -1,5 +1,11 @@
 from typing import TYPE_CHECKING, Optional, Set
 
+from rq import utils
+from rq.defaults import WORKERS_BY_QUEUE_KEY
+from rq.defaults import REDIS_WORKER_KEYS
+from rq.defaults import MAX_KEYS
+
+
 if TYPE_CHECKING:
     from redis import Redis
     from redis.client import Pipeline
@@ -7,13 +13,6 @@ if TYPE_CHECKING:
     from .queue import Queue
     from .worker import BaseWorker
 
-from rq.utils import split_list
-
-from .utils import as_text
-
-WORKERS_BY_QUEUE_KEY = 'rq:workers:%s'
-REDIS_WORKER_KEYS = 'rq:workers'
-MAX_KEYS = 1000
 
 
 def register(worker: 'BaseWorker', pipeline: Optional['Pipeline'] = None):
@@ -75,7 +74,7 @@ def get_keys(queue: Optional['Queue'] = None, connection: Optional['Redis'] = No
         redis = connection  # type: ignore
         redis_key = REDIS_WORKER_KEYS
 
-    return {as_text(key) for key in redis.smembers(redis_key)}
+    return {utils.as_text(key) for key in redis.smembers(redis_key)}
 
 
 def clean_worker_registry(queue: 'Queue'):
@@ -98,7 +97,7 @@ def clean_worker_registry(queue: 'Queue'):
                 invalid_keys.append(keys[i])
 
         if invalid_keys:
-            for invalid_subset in split_list(invalid_keys, MAX_KEYS):
+            for invalid_subset in utils.split_list(invalid_keys, MAX_KEYS):
                 pipeline.srem(WORKERS_BY_QUEUE_KEY % queue.name, *invalid_subset)
                 pipeline.srem(REDIS_WORKER_KEYS, *invalid_subset)
                 pipeline.execute()

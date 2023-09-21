@@ -38,3 +38,7 @@ class AbandonedJobError(Exception):
 
 class StopRequested(Exception):
     pass
+
+
+class NoRedisConnectionException(Exception):
+    pass

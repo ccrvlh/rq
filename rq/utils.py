@@ -11,19 +11,19 @@ import datetime as dt
 import importlib
 import logging
 import numbers
+import sys
+
 from collections.abc import Iterable
 from signal import signal
-import sys
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
+from redis.exceptions import ResponseError
+
+from rq.exceptions import TimeoutFormatError
 
 if TYPE_CHECKING:
     from redis import Redis
 
-    from .queue import Queue
-
-from redis.exceptions import ResponseError
-
-from .exceptions import TimeoutFormatError
+    from rq.queue import Queue
 
 logger = logging.getLogger(__name__)
 
