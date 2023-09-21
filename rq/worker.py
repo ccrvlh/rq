@@ -45,8 +45,12 @@ from .defaults import (
     DEFAULT_RESULT_TTL,
     DEFAULT_WORKER_TTL,
 )
-from .exceptions import DequeueTimeout, DeserializationError, ShutDownImminentException
-from .job import Job, JobStatus
+from .const import WorkerStatus
+from .const import DequeueStrategy
+from .exceptions import DequeueTimeout
+from .exceptions import DeserializationError
+from .job import Job
+from .job import Job
 from .logutils import blue, green, setup_loghandlers, yellow
 from .maintenance import clean_intermediate_queue
 from .queue import Queue
@@ -89,19 +93,6 @@ def signal_name(signum):
         return 'SIG_UNKNOWN'
     except ValueError:
         return 'SIG_UNKNOWN'
-
-
-class DequeueStrategy(str, Enum):
-    DEFAULT = "default"
-    ROUND_ROBIN = "round_robin"
-    RANDOM = "random"
-
-
-class WorkerStatus(str, Enum):
-    STARTED = 'started'
-    SUSPENDED = 'suspended'
-    BUSY = 'busy'
-    IDLE = 'idle'
 
 
 class BaseWorker:
@@ -743,7 +734,6 @@ class BaseWorker:
         warnings.warn("worker.state is deprecated, use worker.get_state() instead.", DeprecationWarning)
         return self.get_state()
 
-
     def perform_job(self, job: 'Job', queue: 'Queue') -> bool:
         """Performs the actual work of a job.  Will/should only be called
         inside the work horse's process.
@@ -816,7 +806,6 @@ class BaseWorker:
                 self.log.info('Result will never expire, clean up result key manually')
 
         return True
-
 
     state = property(_get_state, _set_state)
 
