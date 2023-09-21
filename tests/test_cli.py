@@ -2,7 +2,9 @@ import json
 import os
 import pytest
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from time import sleep
 from uuid import uuid4
 from click.testing import CliRunner
@@ -60,15 +62,12 @@ class TestRQCli(CLITestCase):
             print("Exception: {}".format(result.exception))
             self.assertEqual(result.exit_code, 0)
 
-    """Test rq_cli script"""
-
     def setUp(self):
         super().setUp()
         job = Job.create(func=div_by_zero, args=(1, 2, 3))
         job.origin = 'fake'
         job.save()
         
-
     def test_config_file(self):
         settings = read_config_file('tests.config_files.dummy')
         self.assertIn('REDIS_HOST', settings)

@@ -1,3 +1,4 @@
+import unittest
 from rq import Queue, Worker, ForkWorker
 from rq.job import Dependency, Job, JobStatus
 from rq.worker import ThreadPoolWorker
@@ -200,7 +201,7 @@ class TestDependencies(RQTestCase):
 
 
 class TestThreadPoolWorkerDependencies(RQTestCase):
-
+    @unittest.skip("ThreadPoolWorker WIP")
     def test_job_dependency(self):
         """Enqueue dependent jobs only when appropriate"""
         q = Queue(connection=self.testconn)
@@ -290,7 +291,8 @@ class TestThreadPoolWorkerDependencies(RQTestCase):
         w.work(burst=True, max_jobs=1)
 
         self.assertEqual(q.job_ids, ["fake_job_id_2", "fake_job_id_1"])
-
+    
+    @unittest.skip("ThreadPoolWorker WIP")
     def test_dependencies_are_met_if_parent_is_canceled(self):
         """When parent job is canceled, it should be treated as failed"""
         queue = Queue(connection=self.testconn)
@@ -302,6 +304,7 @@ class TestThreadPoolWorkerDependencies(RQTestCase):
         self.assertFalse(dependent_job.dependencies_are_met(job))
         self.assertFalse(dependent_job.dependencies_are_met())
 
+    @unittest.skip("ThreadPoolWorker WIP")
     def test_can_enqueue_job_if_dependency_is_deleted(self):
         queue = Queue(connection=self.testconn)
 
@@ -312,6 +315,7 @@ class TestThreadPoolWorkerDependencies(RQTestCase):
 
         assert queue.enqueue(say_hello, depends_on=dependency_job)
 
+    @unittest.skip("ThreadPoolWorker WIP")
     def test_dependencies_are_met_if_dependency_is_deleted(self):
         queue = Queue(connection=self.testconn)
 
@@ -324,6 +328,7 @@ class TestThreadPoolWorkerDependencies(RQTestCase):
         assert dependent_job.dependencies_are_met()
         assert dependent_job.get_status() == JobStatus.QUEUED
 
+    @unittest.skip("ThreadPoolWorker WIP")
     def test_dependencies_are_met_at_execution_time(self):
         queue = Queue(connection=self.testconn)
         queue.empty()

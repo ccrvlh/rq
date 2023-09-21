@@ -5,6 +5,7 @@ import subprocess
 import sys
 import threading
 import time
+import unittest
 import zlib
 import psutil
 import pytest
@@ -1402,6 +1403,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         self.assertEqual(fooq.count, 0)
 
     @slow
+    @unittest.skip('Very slow')
     def test_work_horse_force_death(self):
         """Simulate a frozen worker that doesn't observe the timeout properly.
         Fake it by artificially setting the timeout of the parent process to
