@@ -60,7 +60,7 @@ from .scheduler import RQScheduler
 from .serializers import resolve_serializer
 from .suspension import is_suspended
 from .timeouts import HorseMonitorTimeoutException, JobTimeoutException, UnixSignalDeathPenalty
-from .utils import as_text, backend_class, compact, ensure_list, get_version, utcformat, utcnow, utcparse
+from .utils import as_text, backend_class, compact, ensure_list, get_version, utcformat, utcnow, utcparse, signal_name
 from .version import VERSION
 
 try:
@@ -73,24 +73,6 @@ except ImportError:
 
 logger = logging.getLogger("rq.worker")
 
-
-
-_signames = dict(
-    (getattr(signal, signame), signame) for signame in dir(signal) if signame.startswith('SIG') and '_' not in signame
-)
-
-
-def signal_name(signum):
-    try:
-        if sys.version_info[:2] >= (3, 5):
-            return signal.Signals(signum).name
-        else:
-            return _signames[signum]
-
-    except KeyError:
-        return 'SIG_UNKNOWN'
-    except ValueError:
-        return 'SIG_UNKNOWN'
 
 
 class BaseWorker:

@@ -12,6 +12,8 @@ import importlib
 import logging
 import numbers
 from collections.abc import Iterable
+from signal import signal
+import sys
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
 
 if TYPE_CHECKING:
@@ -25,6 +27,10 @@ from .exceptions import TimeoutFormatError
 
 logger = logging.getLogger(__name__)
 
+
+_signames = dict(
+    (getattr(signal, signame), signame) for signame in dir(signal) if signame.startswith('SIG') and '_' not in signame
+)
 
 def compact(lst: List[Any]) -> List[Any]:
     """Excludes `None` values from a list-like object.
@@ -379,3 +385,18 @@ def parse_names(queues_or_names: List[Union[str, 'Queue']]) -> List[str]:
         else:
             names.append(str(queue_or_name))
     return names
+
+
+
+
+def signal_name(signum):
+    try:
+        if sys.version_info[:2] >= (3, 5):
+            return signal.Signals(signum).name
+        else:
+            return _signames[signum]
+
+    except KeyError:
+        return 'SIG_UNKNOWN'
+    except ValueError:
+        return 'SIG_UNKNOWN'
