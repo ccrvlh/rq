@@ -85,20 +85,33 @@ logger = logging.getLogger("rq.worker")
 
 class BaseWorker:
     redis_worker_namespace_prefix = 'rq:worker:'
-    redis_workers_keys = worker_registration.REDIS_WORKER_KEYS
-    death_penalty_class = UnixSignalDeathPenalty
-    queue_class = Queue
-    job_class = Job
+    """ The Redis key namespace used for all keys set by RQ for a worker. """
 
-    # `log_result_lifespan` controls whether "Result is kept for XXX seconds"
-    # messages are logged after every job, by default they are.
+    redis_workers_keys = worker_registration.REDIS_WORKER_KEYS
+    """ The Redis key namespace used for all keys set by RQ for a worker. """
+
+    death_penalty_class = UnixSignalDeathPenalty
+    """ The default death penalty class. """
+    
+    queue_class = Queue
+    """The Queue class associated with this worker."""
+
+    job_class = Job
+    """The Job class associated with this worker."""
+
     log_result_lifespan = True
-    # `log_job_description` is used to toggle logging an entire jobs description.
+    """`log_job_description` is used to toggle logging an entire jobs description.
+    Controls whether "Result is kept for XXX seconds" messages are logged after every job, by default they are.
+    """
+
     log_job_description = True
-    # factor to increase connection_wait_time in case of continuous connection failures.
+    """ factor to increase connection_wait_time in case of continuous connection failures."""
+    
     exponential_backoff_factor = 2.0
-    # Max Wait time (in seconds) after which exponential_backoff_factor won't be applicable.
+    """ Max Wait time (in seconds) after which exponential_backoff_factor won't be applicable."""
+
     max_connection_wait_time = 60.0
+    """ The default connection timeout for the Redis connection."""
 
     def __init__(
         self,
