@@ -15,11 +15,13 @@ from redis import ConnectionPool
 from rq import utils
 from rq.serializers import DefaultSerializer
 from rq.connections import parse_connection
-from rq.defaults import DEFAULT_LOGGING_DATE_FORMAT, DEFAULT_LOGGING_FORMAT
+from rq.defaults import DEFAULT_LOGGING_DATE_FORMAT
+from rq.defaults import DEFAULT_LOGGING_FORMAT
 from rq.job import Job
 from rq.logutils import setup_loghandlers
 from rq.queue import Queue
-from rq.worker import BaseWorker, ForkWorker
+from rq.worker import BaseWorker
+from rq.worker import ForkWorker
 
 
 class WorkerData(NamedTuple):

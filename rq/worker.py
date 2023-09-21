@@ -358,8 +358,6 @@ class BaseWorker:
         signal.signal(signal.SIGINT, self.request_stop)
         signal.signal(signal.SIGTERM, self.request_stop)
 
-    state = property(_get_state, _set_state)
-
     def _start_scheduler(
         self,
         burst: bool = False,
@@ -395,6 +393,8 @@ class BaseWorker:
                 self.scheduler.release_locks()
             else:
                 self.scheduler.start()
+    
+    state = property(_get_state, _set_state)
 
     # Housekeeping
 
