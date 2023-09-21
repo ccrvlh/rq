@@ -34,6 +34,7 @@ from rq.connections import get_current_connection
 from rq.connections import pop_connection
 from rq.connections import push_connection
 from rq.defaults import (
+    DEFAULT_CPU_THREADS,
     DEFAULT_JOB_MONITORING_INTERVAL,
     DEFAULT_LOGGING_DATE_FORMAT,
     DEFAULT_LOGGING_FORMAT,
