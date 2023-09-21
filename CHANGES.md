@@ -8,6 +8,8 @@
 - Added first draft of `ThreadPoolWorker` (beta)
 - Added first draft of main `RQ` class
 - Rename `RQScheduler` to `Scheduler`
+- Add native `API` and `Exporter`
+- Remove `Local`
 
 ### RQ 1.15.1 (2023-06-20)
 
