@@ -1,6 +1,5 @@
+import signal
 
-
-from signal import signal
 from rq.exceptions import ShutDownImminentException
 from rq.utils import signal_name
 from rq.worker import ForkWorker

@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import signal
 import subprocess
 import sys
@@ -28,7 +27,6 @@ from rq.serializers import JSONSerializer
 from rq.suspension import resume, suspend
 from rq.utils import as_text, get_version, utcnow
 from rq.version import VERSION
-from rq.contrib.heroku import HerokuWorker
 from rq.worker import WorkerStatus
 from tests import RQTestCase, slow
 from tests.fixtures import (
@@ -36,7 +34,6 @@ from tests.fixtures import (
     access_self,
     create_file,
     create_file_after_timeout,
-    create_file_after_timeout_and_setsid,
     div_by_zero,
     do_nothing,
     kill_worker,
@@ -45,7 +42,6 @@ from tests.fixtures import (
     modify_self,
     modify_self_and_error,
     raise_exc_mock,
-    run_dummy_heroku_worker,
     save_key_ttl,
     say_hello,
     say_pid,
@@ -1224,11 +1220,6 @@ class TestWorker(RQTestCase):
         self.assertEqual(expected, sorted_ids)
 
 
-def wait_and_kill_work_horse(pid, time_to_wait=0.0):
-    time.sleep(time_to_wait)
-    os.kill(pid, signal.SIGKILL)
-
-
 class TestForkWorker(RQTestCase):
 
     def test_request_force_stop_ignores_consecutive_signals(self):
@@ -1309,7 +1300,6 @@ class TestForkWorker(RQTestCase):
             #   which was enqueued before the "rollback" was executed twice.
             #   So before that fix the call count was 4 instead of 3
             self.assertEqual(mocked.call_count, 3)
-
 
 
 class TimeoutTestCase:
@@ -1451,11 +1441,6 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         self.assertFalse(psutil.pid_exists(subprocess_pid))
 
 
-def schedule_access_self():
-    q = Queue('default', connection=get_current_connection())
-    q.enqueue(access_self)
-
-
 @pytest.mark.skipif(sys.platform == 'darwin', reason='Fails on OS X')
 class TestWorkerSubprocess(RQTestCase):
     def setUp(self):
@@ -1487,93 +1472,6 @@ class TestWorkerSubprocess(RQTestCase):
         assert q.count == 0
 
 
-@pytest.mark.skipif(sys.platform == 'darwin', reason='requires Linux signals')
-@skipIf('pypy' in sys.version.lower(), 'these tests often fail on pypy')
-class HerokuWorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
-    def setUp(self):
-        super().setUp()
-        self.sandbox = '/tmp/rq_shutdown/'
-        os.makedirs(self.sandbox)
-
-    def tearDown(self):
-        shutil.rmtree(self.sandbox, ignore_errors=True)
-
-    @slow
-    def test_immediate_shutdown(self):
-        """Heroku work horse shutdown with immediate (0 second) kill"""
-        p = Process(target=run_dummy_heroku_worker, args=(self.sandbox, 0))
-        p.start()
-        time.sleep(0.5)
-
-        os.kill(p.pid, signal.SIGRTMIN)
-
-        p.join(2)
-        self.assertEqual(p.exitcode, 1)
-        self.assertTrue(os.path.exists(os.path.join(self.sandbox, 'started')))
-        self.assertFalse(os.path.exists(os.path.join(self.sandbox, 'finished')))
-
-    @slow
-    def test_1_sec_shutdown(self):
-        """Heroku work horse shutdown with 1 second kill"""
-        p = Process(target=run_dummy_heroku_worker, args=(self.sandbox, 1))
-        p.start()
-        time.sleep(0.5)
-
-        os.kill(p.pid, signal.SIGRTMIN)
-        time.sleep(0.1)
-        self.assertEqual(p.exitcode, None)
-        p.join(2)
-        self.assertEqual(p.exitcode, 1)
-
-        self.assertTrue(os.path.exists(os.path.join(self.sandbox, 'started')))
-        self.assertFalse(os.path.exists(os.path.join(self.sandbox, 'finished')))
-
-    @slow
-    def test_shutdown_double_sigrtmin(self):
-        """Heroku work horse shutdown with long delay but SIGRTMIN sent twice"""
-        p = Process(target=run_dummy_heroku_worker, args=(self.sandbox, 10))
-        p.start()
-        time.sleep(0.5)
-
-        os.kill(p.pid, signal.SIGRTMIN)
-        # we have to wait a short while otherwise the second signal wont bet processed.
-        time.sleep(0.1)
-        os.kill(p.pid, signal.SIGRTMIN)
-        p.join(2)
-        self.assertEqual(p.exitcode, 1)
-
-        self.assertTrue(os.path.exists(os.path.join(self.sandbox, 'started')))
-        self.assertFalse(os.path.exists(os.path.join(self.sandbox, 'finished')))
-
-    @mock.patch('rq.worker.logger.info')
-    def test_handle_shutdown_request(self, mock_logger_info):
-        """Mutate HerokuWorker so _horse_pid refers to an artificial process
-        and test handle_warm_shutdown_request"""
-        w = HerokuWorker('foo')
-
-        path = os.path.join(self.sandbox, 'shouldnt_exist')
-        p = Process(target=create_file_after_timeout_and_setsid, args=(path, 2))
-        p.start()
-        self.assertEqual(p.exitcode, None)
-        time.sleep(0.1)
-
-        w._horse_pid = p.pid
-        w.handle_warm_shutdown_request()
-        p.join(2)
-        # would expect p.exitcode to be -34
-        self.assertEqual(p.exitcode, -34)
-        self.assertFalse(os.path.exists(path))
-        mock_logger_info.assert_called_with('Killed horse pid %s', p.pid)
-
-    def test_handle_shutdown_request_no_horse(self):
-        """Mutate HerokuWorker so _horse_pid refers to non existent process
-        and test handle_warm_shutdown_request"""
-        w = HerokuWorker('foo')
-
-        w._horse_pid = 19999
-        w.handle_warm_shutdown_request()
-
-
 class TestExceptionHandlerMessageEncoding(RQTestCase):
     def setUp(self):
         super().setUp()
@@ -1588,4 +1486,14 @@ class TestExceptionHandlerMessageEncoding(RQTestCase):
     def test_handle_exception_handles_non_ascii_in_exception_message(self):
         """worker.handle_exception doesn't crash on non-ascii in exception message."""
         self.worker.handle_exception(Mock(), *self.exc_info)
+
+
+def wait_and_kill_work_horse(pid, time_to_wait=0.0):
+    time.sleep(time_to_wait)
+    os.kill(pid, signal.SIGKILL)
+
+
+def schedule_access_self():
+    q = Queue('default', connection=get_current_connection())
+    q.enqueue(access_self)
 

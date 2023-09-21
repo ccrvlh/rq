@@ -67,6 +67,7 @@ class TestRQCli(CLITestCase):
         job = Job.create(func=div_by_zero, args=(1, 2, 3))
         job.origin = 'fake'
         job.save()
+        
 
     def test_config_file(self):
         settings = read_config_file('tests.config_files.dummy')

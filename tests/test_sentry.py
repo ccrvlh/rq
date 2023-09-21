@@ -1,3 +1,4 @@
+import unittest
 import pytest
 
 from unittest import mock
@@ -41,7 +42,7 @@ class TestSentry(RQTestCase):
         runner.invoke(main, ['worker-pool', '-u', self.redis_url, '-b', '--sentry-dsn', 'https://1@sentry.io/1'])
         self.assertEqual(mocked.call_count, 2)
 
-    @pytest.mark.skip(reason="Avoid sentry tests")
+    @unittest.skip(reason="Avoid sentry tests")
     def test_failure_capture(self):
         """Test failure is captured by Sentry SDK"""
         from sentry_sdk import Hub
