@@ -1,21 +1,23 @@
 import tempfile
 import time
 import unittest
-from datetime import timedelta
-from unittest.mock import PropertyMock, patch
 
+from datetime import timedelta
+from unittest.mock import PropertyMock
+from unittest.mock import patch
 from redis import Redis
 
 from rq.defaults import UNSERIALIZABLE_RETURN_VALUE_PAYLOAD
 from rq.job import Job
 from rq.queue import Queue
 from rq.registry import StartedJobRegistry
-from rq.results import Result, get_key
+from rq.results import Result
 from rq.utils import get_version, utcnow
 from rq.worker import ForkWorker
-from tests import RQTestCase
 
-from .fixtures import div_by_zero, say_hello
+from tests import RQTestCase
+from tests.fixtures import div_by_zero
+from tests.fixtures import say_hello
 
 
 @unittest.skipIf(get_version(Redis()) < (5, 0, 0), 'Skip if Redis server < 5.0')
@@ -34,7 +36,7 @@ class TestScheduledJobRegistry(RQTestCase):
         self.assertEqual(job.latest_result().return_value, 1)
 
         # Check that ttl is properly set
-        key = get_key(job.id)
+        key = Result.get_key(job.id)
         ttl = self.connection.pttl(key)
         self.assertTrue(5000 < ttl <= 10000)
 
@@ -55,7 +57,7 @@ class TestScheduledJobRegistry(RQTestCase):
         self.assertEqual(result.exc_string, 'exception')
 
         # Check that ttl is properly set
-        key = get_key(job.id)
+        key = Result.get_key(job.id)
         ttl = self.connection.pttl(key)
         self.assertTrue(5000 < ttl <= 10000)
 

@@ -4,31 +4,27 @@ from base64 import b64decode
 from base64 import b64encode
 from datetime import datetime
 from datetime import timezone
-from enum import Enum
 from typing import Any
 from typing import Optional
 from redis import Redis
 
 from rq import utils
 from rq.job import Job
+from rq.const import ResultType
 from rq.defaults import UNSERIALIZABLE_RETURN_VALUE_PAYLOAD
 from rq.serializers import resolve_serializer
-
 
 def get_key(job_id):
     return 'rq:results:%s' % job_id
 
 
+
 class Result:
-    class Type(Enum):
-        SUCCESSFUL = 1
-        FAILED = 2
-        STOPPED = 3
 
     def __init__(
         self,
         job_id: str,
-        type: Type,
+        type: ResultType,
         connection: Redis,
         id: Optional[str] = None,
         created_at: Optional[datetime] = None,
@@ -45,17 +41,43 @@ class Result:
         self.job_id = job_id
         self.id = id
 
-    def __repr__(self):
-        return f'Result(id={self.id}, type={self.Type(self.type).name})'
+    def save(self, ttl, pipeline=None):
+        """Save result data to Redis"""
+        key = self.get_key(self.job_id)
 
-    def __eq__(self, other):
+        connection = pipeline if pipeline is not None else self.connection
+        # result = connection.zadd(key, {self.serialize(): self.created_at.timestamp()})
+        result = connection.xadd(key, self.serialize(), maxlen=10)
+        # If xadd() is called in a pipeline, it returns a pipeline object instead of stream ID
+        if pipeline is None:
+            self.id = result.decode()
+        if ttl is not None:
+            if ttl == -1:
+                connection.persist(key)
+            else:
+                connection.expire(key, ttl)
+        return self.id
+
+    def serialize(self):
+        data = {'type': self.type.value}
+
+        if self.exc_string is not None:
+            data['exc_string'] = b64encode(zlib.compress(self.exc_string.encode())).decode()
+
         try:
-            return self.id == other.id
-        except AttributeError:
-            return False
+            serialized = self.serializer.dumps(self.return_value)
+        except:  # noqa
+            serialized = self.serializer.dumps(UNSERIALIZABLE_RETURN_VALUE_PAYLOAD)
 
-    def __bool__(self):
-        return bool(self.id)
+        if self.return_value is not None:
+            data['return_value'] = b64encode(serialized).decode()
+
+        # return json.dumps(data)
+        return data
+
+    @classmethod
+    def get_key(job_id):
+        return 'rq:results:%s' % job_id
 
     @classmethod
     def create(cls, job, type, ttl, return_value=None, exc_string=None, pipeline=None):
@@ -176,36 +198,14 @@ class Result:
     def get_key(cls, job_id):
         return 'rq:results:%s' % job_id
 
-    def save(self, ttl, pipeline=None):
-        """Save result data to Redis"""
-        key = self.get_key(self.job_id)
+    def __repr__(self):
+        return f'Result(id={self.id}, type={ResultType(self.type).name})'
 
-        connection = pipeline if pipeline is not None else self.connection
-        # result = connection.zadd(key, {self.serialize(): self.created_at.timestamp()})
-        result = connection.xadd(key, self.serialize(), maxlen=10)
-        # If xadd() is called in a pipeline, it returns a pipeline object instead of stream ID
-        if pipeline is None:
-            self.id = result.decode()
-        if ttl is not None:
-            if ttl == -1:
-                connection.persist(key)
-            else:
-                connection.expire(key, ttl)
-        return self.id
-
-    def serialize(self):
-        data = {'type': self.type.value}
-
-        if self.exc_string is not None:
-            data['exc_string'] = b64encode(zlib.compress(self.exc_string.encode())).decode()
-
+    def __eq__(self, other):
         try:
-            serialized = self.serializer.dumps(self.return_value)
-        except:  # noqa
-            serialized = self.serializer.dumps(UNSERIALIZABLE_RETURN_VALUE_PAYLOAD)
+            return self.id == other.id
+        except AttributeError:
+            return False
 
-        if self.return_value is not None:
-            data['return_value'] = b64encode(serialized).decode()
-
-        # return json.dumps(data)
-        return data
+    def __bool__(self):
+        return bool(self.id)

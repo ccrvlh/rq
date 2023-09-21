@@ -10,6 +10,8 @@
 - Rename `RQScheduler` to `Scheduler`
 - Add native `API` and `Exporter`
 - Remove `Local`
+  - TODO: Current Job
+- Reorganize `Job` & `Results`
 
 ### RQ 1.15.1 (2023-06-20)
 

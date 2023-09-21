@@ -1,0 +1,79 @@
+# class RQConfig:
+
+#     queue: Optional[str] = None,
+#     connection: Optional[Redis] = None,
+#     queues: Optional[List[str]] = None,
+#     namespace: Optional[str] = None,
+#     redis_url: Optional[str] = None,
+#     job_id_prefix: Optional[str] = None,
+#     worker_prefix: Optional[str] = None,
+#     serializer: Optional[str] = None,
+#     queue_class: Optional[str] = None,
+#     job_class: Optional[str] = None,
+#     worker_class: Optional[str] = None,
+#     log_level: Optional[str] = None,
+#     debug_mode: Optional[bool] = None,
+#     job_timeout: Optional[str] = None,
+#     result_ttl: Optional[str] = None,
+#     failure_ttl: Optional[str] = None,
+#     success_ttl: Optional[str] = None,
+#     maintenance_interval: Optional[str] = None,
+#     callback_timeout: Optional[str] = None,
+#     scheduler_fallback_interval: Optional[str] = None,
+
+#     # JOBS
+#     self._id = id
+#     self.created_at = utils.utcnow()
+#     self._data = UNEVALUATED
+#     self._func_name = UNEVALUATED
+#     self._instance = UNEVALUATED
+#     self._args = UNEVALUATED
+#     self._kwargs = UNEVALUATED
+#     self._success_callback_name = None
+#     self._success_callback = UNEVALUATED
+#     self._failure_callback_name = None
+#     self._failure_callback = UNEVALUATED
+#     self._stopped_callback_name = None
+#     self._stopped_callback = UNEVALUATED
+#     self.description: Optional[str] = None
+#     self.origin: str = ''
+#     self.enqueued_at: Optional[datetime] = None
+#     self.started_at: Optional[datetime] = None
+#     self.ended_at: Optional[datetime] = None
+#     self._result = None
+#     self._exc_info = None
+#     self.timeout: Optional[float] = None
+#     self._success_callback_timeout: Optional[int] = None
+#     self._failure_callback_timeout: Optional[int] = None
+#     self._stopped_callback_timeout: Optional[int] = None
+#     self.result_ttl: Optional[int] = None
+#     self.failure_ttl: Optional[int] = None
+#     self.ttl: Optional[int] = None
+#     self.worker_name: Optional[str] = None
+#     self._status = None
+#     self._dependency_ids: List[str] = []
+#     self.meta: Dict = {}
+#     self.serializer = resolve_serializer(serializer)
+#     self.retries_left: Optional[int] = None
+#     self.retry_intervals: Optional[List[int]] = None
+#     self.redis_server_version: Optional[Tuple[int, int, int]] = None
+#     self.last_heartbeat: Optional[datetime] = None
+#     self.allow_dependency_failures: Optional[bool] = None
+#     self.enqueue_at_front: Optional[bool] = None
+
+    # WORKER
+    # queues,
+    # name: Optional[str] = None,
+    # default_result_ttl=DEFAULT_RESULT_TTL,
+    # connection: Optional['Redis'] = None,
+    # exc_handler=None,
+    # exception_handlers=None,
+    # default_worker_ttl=DEFAULT_WORKER_TTL,
+    # maintenance_interval: int = DEFAULT_MAINTENANCE_TASK_INTERVAL,
+    # job_class: Optional[Type['Job']] = None,
+    # queue_class: Optional[Type['Queue']] = None,
+    # log_job_description: bool = True,
+    # job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL,
+    # disable_default_exception_handler: bool = False,
+    # prepare_for_work: bool = True,
+    # serializer=None

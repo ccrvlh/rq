@@ -28,6 +28,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+UNEVALUATED = object()
+"""Sentinel value to mark that some of our lazily evaluated properties have not
+yet been evaluated.
+"""
+
+
 _signames = dict(
     (getattr(signal, signame), signame) for signame in dir(signal) if signame.startswith('SIG') and '_' not in signame
 )
