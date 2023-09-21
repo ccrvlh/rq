@@ -15,6 +15,7 @@ from redis import WatchError
 
 from rq.defaults import CALLBACK_TIMEOUT
 from rq.defaults import UNSERIALIZABLE_RETURN_VALUE_PAYLOAD
+from rq.local import LocalStack
 from rq.timeouts import BaseDeathPenalty
 from rq.timeouts import JobTimeoutException
 
@@ -712,10 +713,11 @@ class Job:
             result (Any): The job result
         """
         self.connection.persist(self.key)
+        _job_stack.push(self)
         try:
             self._result = self._execute()
         finally:
-            pass
+            assert self is _job_stack.pop()
         return self._result
 
     def prepare_for_execution(self, worker_name: str, pipeline: 'Pipeline'):
@@ -1625,7 +1627,7 @@ def get_current_job(connection: Optional['Redis'] = None, job_class: Optional['J
         warnings.warn("connection argument for get_current_job is deprecated.", DeprecationWarning)
     if job_class:
         warnings.warn("job_class argument for get_current_job is deprecated.", DeprecationWarning)
-    return None
+    return _job_stack.top
 
 
 def requeue_job(job_id: str, connection: 'Redis', serializer=None) -> 'Job':
@@ -1642,3 +1644,5 @@ def requeue_job(job_id: str, connection: 'Redis', serializer=None) -> 'Job':
     job = Job.fetch(job_id, connection=connection, serializer=serializer)
     return job.requeue()
 
+
+_job_stack = LocalStack()

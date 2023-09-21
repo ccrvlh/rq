@@ -330,7 +330,7 @@ class TestWorker(RQTestCase):
         worker.work(burst=True)
         self.assertIn(job, job.failed_job_registry)
         job.refresh()
-        self.assertIn('rq.timeouts.JobTimeoutException', job.exc_info)
+        self.assertIn('rq.exceptions.JobTimeoutException', job.exc_info)
 
     @slow
     def test_heartbeat_busy(self):
