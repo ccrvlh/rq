@@ -3,13 +3,17 @@ import queue
 import time
 import unittest
 import zlib
-from datetime import datetime, timedelta
-from pickle import dumps, loads
 
+from datetime import datetime
+from datetime import timedelta
+from pickle import dumps
+from pickle import loads
 from redis import Redis, WatchError
 
 from rq.defaults import CALLBACK_TIMEOUT
-from rq.exceptions import DeserializationError, InvalidJobOperation, NoSuchJobError
+from rq.exceptions import DeserializationError
+from rq.exceptions import InvalidJobOperation
+from rq.exceptions import NoSuchJobError
 from rq.job import Callback, Dependency, Job, JobStatus, cancel_job, get_current_job
 from rq.queue import Queue
 from rq.registry import (

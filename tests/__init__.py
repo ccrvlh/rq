@@ -1,8 +1,8 @@
 import logging
 import os
 import unittest
-
 import pytest
+
 from redis import Redis
 
 from rq import pop_connection, push_connection
@@ -93,12 +93,6 @@ class RQTestCase(unittest.TestCase):
     def tearDown(self):
         # Flush afterwards
         self.testconn.flushdb()
-
-    # Implement assertIsNotNone for Python runtimes < 2.7 or < 3.1
-    if not hasattr(unittest.TestCase, 'assertIsNotNone'):
-
-        def assertIsNotNone(self, value, *args):  # noqa
-            self.assertNotEqual(value, None, *args)
 
     @classmethod
     def tearDownClass(cls):
