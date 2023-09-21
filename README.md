@@ -1,23 +1,20 @@
 RQ (_Redis Queue_) is a simple Python library for queueing jobs and processing
-them in the background with workers.  It is backed by Redis and it is designed
-to have a low barrier to entry.  It should be integrated in your web stack
+them in the background with workers. It is backed by Redis and it is designed
+to have a low barrier to entry. It should be integrated in your web stack
 easily.
 
-RQ requires Redis >= 3.0.0.
+RQ requires Redis >= 5.0.0.
 
 [![Build status](https://github.com/rq/rq/workflows/Test%20rq/badge.svg)](https://github.com/rq/rq/actions?query=workflow%3A%22Test+rq%22)
 [![PyPI](https://img.shields.io/pypi/pyversions/rq.svg)](https://pypi.python.org/pypi/rq)
 [![Coverage](https://codecov.io/gh/rq/rq/branch/master/graph/badge.svg)](https://codecov.io/gh/rq/rq)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-
 Full documentation can be found [here][d].
-
 
 ## Support RQ
 
 If you find RQ useful, please consider supporting this project via [Tidelift](https://tidelift.com/subscription/pkg/pypi-rq?utm_source=pypi-rq&utm_medium=referral&utm_campaign=readme).
-
 
 ## Getting started
 
@@ -77,8 +74,7 @@ queue.enqueue(say_hello, retry=Retry(max=3))
 queue.enqueue(say_hello, retry=Retry(max=3, interval=[10, 30, 60]))
 ```
 
-For a more complete example, refer to the [docs][d].  But this is the essence.
-
+For a more complete example, refer to the [docs][d]. But this is the essence.
 
 ### The worker
 
@@ -95,7 +91,6 @@ Job result = 818
 
 That's about it.
 
-
 ## Installation
 
 Simply use the following command to install the latest released version:
@@ -105,7 +100,6 @@ Simply use the following command to install the latest released version:
 If you want the cutting edge version (that may well be broken), use this:
 
     pip install git+https://github.com/rq/rq.git@master#egg=rq
-
 
 ## Related Projects
 
@@ -117,13 +111,11 @@ If you use RQ, Check out these below repos which might be useful in your rq base
 - [Flask-RQ2](https://github.com/rq/Flask-RQ2)
 - [rq-scheduler](https://github.com/rq/rq-scheduler)
 
-
 ## Project history
 
 This project has been inspired by the good parts of [Celery][1], [Resque][2]
 and [this snippet][3], and has been created as a lightweight alternative to the
 heaviness of Celery or other AMQP-based queueing implementations.
-
 
 [d]: http://python-rq.org/
 [m]: http://pypi.python.org/pypi/mailer

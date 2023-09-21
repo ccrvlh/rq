@@ -8,7 +8,6 @@ import zlib
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, Union
 from uuid import uuid4
 from redis import WatchError
@@ -25,7 +24,8 @@ from rq.connections import resolve_connection
 from rq.exceptions import DeserializationError
 from rq.exceptions import InvalidJobOperation
 from rq.exceptions import NoSuchJobError
-from rq.serializers import SerializerInterface, resolve_serializer
+from rq.serializers import SerializerInterface
+from rq.serializers import resolve_serializer
 from rq.types import FunctionReferenceType
 from rq.types import JobDependencyType
 from rq.const import JobStatus, ResultType
@@ -73,7 +73,7 @@ class Job:
 
     redis_job_namespace_prefix = 'rq:job:'
 
-    def __init__(self, id: Optional[str] = None, connection: Optional['Redis'] = None, serializer: Optional[SerializerInterface] = None):
+    def __init__(self, id: Optional[str] = None, connection: Optional['Redis'] = None, serializer: Optional[Type[SerializerInterface]] = None):
         if connection:
             self.connection = connection
         else:
@@ -106,7 +106,7 @@ class Job:
         self.failure_ttl: Optional[int] = None
         self.ttl: Optional[int] = None
         self.worker_name: Optional[str] = None
-        self._status = None
+        self._status: Optional[JobStatus] = None
         self._dependency_ids: List[str] = []
         self.meta: Dict = {}
         self.serializer = resolve_serializer(serializer)
