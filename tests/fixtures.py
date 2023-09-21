@@ -17,7 +17,8 @@ from rq import Connection, Queue, get_current_connection, get_current_job
 from rq.command import send_kill_horse_command, send_shutdown_command
 from rq.decorators import job
 from rq.job import Job
-from rq.worker import HerokuWorker, ForkWorker
+from rq.contrib.heroku import HerokuWorker
+from rq.worker import ForkWorker
 
 
 def say_pid():

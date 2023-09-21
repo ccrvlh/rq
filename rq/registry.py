@@ -448,12 +448,13 @@ def clean_registries(queue: 'Queue'):
         name=queue.name, connection=queue.connection, job_class=queue.job_class, serializer=queue.serializer
     )
     registry.cleanup()
-    registry = StartedJobRegistry(
+    
+    started_registry = StartedJobRegistry(
         name=queue.name, connection=queue.connection, job_class=queue.job_class, serializer=queue.serializer
     )
-    registry.cleanup()
+    started_registry.cleanup()
 
-    registry = FailedJobRegistry(
+    failed_registry = FailedJobRegistry(
         name=queue.name, connection=queue.connection, job_class=queue.job_class, serializer=queue.serializer
     )
-    registry.cleanup()
+    failed_registry.cleanup()

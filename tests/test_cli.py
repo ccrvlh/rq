@@ -823,7 +823,7 @@ class WorkerPoolCLITestCase(CLITestCase):
         result = runner.invoke(main, ['worker-pool', '-u', self.redis_url, '-b', '--worker-class', 'rq.Worker'])
         self.assert_normal_execution(result)
         result = runner.invoke(
-            main, ['worker-pool', '-u', self.redis_url, '-b', '--worker-class', 'rq.worker.SimpleWorker']
+            main, ['worker-pool', '-u', self.redis_url, '-b', '--worker-class', 'rq.worker.Worker']
         )
         self.assert_normal_execution(result)
 

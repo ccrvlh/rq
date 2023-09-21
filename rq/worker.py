@@ -17,6 +17,8 @@ from types import FrameType
 from typing import TYPE_CHECKING, Callable, List, Optional, Tuple, Type, Union
 from uuid import uuid4
 
+from redis import Redis
+
 if TYPE_CHECKING:
     try:
         from resource import struct_rusage
@@ -50,7 +52,7 @@ from .const import DequeueStrategy
 from .exceptions import DequeueTimeout
 from .exceptions import DeserializationError
 from .exceptions import StopRequested
-from .job import Job
+from .job import Job, JobStatus
 from .job import Job
 from .logutils import blue, green, setup_loghandlers, yellow
 from .maintenance import clean_intermediate_queue
@@ -72,7 +74,6 @@ except ImportError:
 
 
 logger = logging.getLogger("rq.worker")
-
 
 
 class BaseWorker:
@@ -148,8 +149,6 @@ class BaseWorker:
         self._shutdown_requested_date: Optional[datetime] = None
 
         self._state: str = 'starting'
-        self._is_horse: bool = False
-        self._horse_pid: int = 0
         self._stop_requested: bool = False
         self._stopped_job_id = None
 
@@ -463,7 +462,7 @@ class BaseWorker:
 
     def execute_job(self, job: 'Job', queue: 'Queue'):
         """To be implemented by subclasses."""
-        raise NotImplementedError
+        raise NotImplementedError("Job execution should be implemented by specific Worker Implementations")
 
     def work(
         self,
@@ -1111,11 +1110,10 @@ class BaseWorker:
         self.log.debug('Sent heartbeat to prevent worker timeout. Next one should arrive in %s seconds.', timeout)
 
     def teardown(self):
-        if not self.is_horse:
-            if self.scheduler:
-                self.stop_scheduler()
-            self.register_death()
-            self.unsubscribe()
+        if self.scheduler:
+            self.stop_scheduler()
+        self.register_death()
+        self.unsubscribe()
 
     def stop_scheduler(self):
         """Ensure scheduler process is stopped
@@ -1203,6 +1201,120 @@ class BaseWorker:
         """Pushes an exception handler onto the exc handler stack."""
         self._exc_handlers.append(handler_func)
 
+    def prepare_job_execution(self, job: 'Job', remove_from_intermediate_queue: bool = False):
+        """Performs misc bookkeeping like updating states prior to
+        job execution.
+        """
+        self.log.debug('Preparing for execution of Job ID %s', job.id)
+        with self.connection.pipeline() as pipeline:
+            self.set_current_job_id(job.id, pipeline=pipeline)
+            self.set_current_job_working_time(0, pipeline=pipeline)
+
+            heartbeat_ttl = self.get_heartbeat_ttl(job)
+            self.heartbeat(heartbeat_ttl, pipeline=pipeline)
+            job.heartbeat(utcnow(), heartbeat_ttl, pipeline=pipeline)
+
+            job.prepare_for_execution(self.name, pipeline=pipeline)
+            if remove_from_intermediate_queue:
+                from .queue import Queue
+
+                queue = Queue(job.origin, connection=self.connection)
+                pipeline.lrem(queue.intermediate_queue_key, 1, job.id)
+            pipeline.execute()
+            self.log.debug('Job preparation finished.')
+
+        msg = 'Processing {0} from {1} since {2}'
+        self.procline(msg.format(job.func_name, job.origin, time.time()))
+
+    def handle_payload(self, message):
+        """Handle external commands"""
+        self.log.debug('Received message: %s', message)
+        payload = parse_payload(message)
+        handle_command(self, payload)
+
+    def pop_exc_handler(self):
+        """Pops the latest exception handler off of the exc handler stack."""
+        return self._exc_handlers.pop()
+
+    def request_stop(self, signum, frame):
+        """Stops the current worker loop but waits for child processes to
+        end gracefully (warm shutdown).
+
+        Args:
+            signum (Any): Signum
+            frame (Any): Frame
+        """
+        self.log.debug('Got signal %s', signal_name(signum))
+        self._shutdown_requested_date = utcnow()
+
+        signal.signal(signal.SIGINT, self.request_force_stop)
+        signal.signal(signal.SIGTERM, self.request_force_stop)
+
+        self.handle_warm_shutdown_request()
+        self._shutdown()
+
+    def _shutdown(self):
+        """
+        If shutdown is requested in the middle of a job, wait until
+        finish before shutting down and save the request in redis
+        """
+        if self.get_state() == WorkerStatus.BUSY:
+            self._stop_requested = True
+            self.set_shutdown_requested_date()
+            self.log.debug('Stopping after current horse is finished. Press Ctrl+C again for a cold shutdown.')
+            if self.scheduler:
+                self.stop_scheduler()
+        else:
+            if self.scheduler:
+                self.stop_scheduler()
+            raise StopRequested()
+
+    def get_heartbeat_ttl(self, job: 'Job') -> int:
+        """Get's the TTL for the next heartbeat.
+
+        Args:
+            job (Job): The Job
+
+        Returns:
+            int: The heartbeat TTL.
+        """
+        if job.timeout and job.timeout > 0:
+            remaining_execution_time = job.timeout - self.current_job_working_time
+            return int(min(remaining_execution_time, self.job_monitoring_interval)) + 60
+        else:
+            return self.job_monitoring_interval + 60
+
+    def maintain_heartbeats(self, job: 'Job'):
+        """Updates worker and job's last heartbeat field. If job was
+        enqueued with `result_ttl=0`, a race condition could happen where this heartbeat
+        arrives after job has been deleted, leaving a job key that contains only
+        `last_heartbeat` field.
+
+        hset() is used when updating job's timestamp. This command returns 1 if a new
+        Redis key is created, 0 otherwise. So in this case we check the return of job's
+        heartbeat() command. If a new key was created, this means the job was already
+        deleted. In this case, we simply send another delete command to remove the key.
+
+        https://github.com/rq/rq/issues/1450
+        """
+        with self.connection.pipeline() as pipeline:
+            self.heartbeat(self.job_monitoring_interval + 60, pipeline=pipeline)
+            ttl = self.get_heartbeat_ttl(job)
+            job.heartbeat(utcnow(), ttl, pipeline=pipeline, xx=True)
+            results = pipeline.execute()
+            if results[2] == 1:
+                self.connection.delete(job.key)
+
+    def __eq__(self, other):
+        """Equality does not take the database/connection into account"""
+        if not isinstance(other, self.__class__):
+            raise TypeError('Cannot compare workers to other types (of workers)')
+        return self.name == other.name
+
+    def __hash__(self):
+        """The hash does not take the database/connection into account"""
+        return hash(self.name)
+
 
 class Worker(BaseWorker):
     def execute_job(self, job: 'Job', queue: 'Queue'):
@@ -1228,6 +1340,11 @@ class Worker(BaseWorker):
 
 
 class ForkWorker(BaseWorker):
+    def __init__(self, queues, name: str | None = None, default_result_ttl=DEFAULT_RESULT_TTL, connection: Redis | None = None, exc_handler=None, exception_handlers=None, default_worker_ttl=DEFAULT_WORKER_TTL, maintenance_interval: int = DEFAULT_MAINTENANCE_TASK_INTERVAL, job_class: type[Job] | None = None, queue_class: type[Queue] | None = None, log_job_description: bool = True, job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL, disable_default_exception_handler: bool = False, prepare_for_work: bool = True, serializer=None, work_horse_killed_handler: Callable[[Job, int, int, struct_rusage], None] | None = None):
+        super().__init__(queues, name, default_result_ttl, connection, exc_handler, exception_handlers, default_worker_ttl, maintenance_interval, job_class, queue_class, log_job_description, job_monitoring_interval, disable_default_exception_handler, prepare_for_work, serializer, work_horse_killed_handler)
+        self._is_horse: bool = False
+        self._horse_pid: int = 0
+
     @property
     def horse_pid(self):
         """The horse's process ID.  Only available in the worker.  Will return
@@ -1265,66 +1382,6 @@ class ForkWorker(BaseWorker):
             pid, stat, rusage = os.wait4(self.horse_pid, 0)
         return pid, stat, rusage
 
-    def request_force_stop(self, signum: int, frame: Optional[FrameType]):
-        """Terminates the application (cold shutdown).
-
-        Args:
-            signum (Any): Signum
-            frame (Any): Frame
-
-        Raises:
-            SystemExit: SystemExit
-        """
-        # When worker is run through a worker pool, it may receive duplicate signals
-        # One is sent by the pool when it calls `pool.stop_worker()` and another is sent by the OS
-        # when user hits Ctrl+C. In this case if we receive the second signal within 1 second,
-        # we ignore it.
-        if (utcnow() - self._shutdown_requested_date) < timedelta(seconds=1):  # type: ignore
-            self.log.debug('Shutdown signal ignored, received twice in less than 1 second')
-            return
-
-        self.log.warning('Cold shut down')
-
-        # Take down the horse with the worker
-        if self.horse_pid:
-            self.log.debug('Taking down horse %s with me', self.horse_pid)
-            self.kill_horse()
-            self.wait_for_horse()
-        raise SystemExit()
-
-    def request_stop(self, signum, frame):
-        """Stops the current worker loop but waits for child processes to
-        end gracefully (warm shutdown).
-
-        Args:
-            signum (Any): Signum
-            frame (Any): Frame
-        """
-        self.log.debug('Got signal %s', signal_name(signum))
-        self._shutdown_requested_date = utcnow()
-
-        signal.signal(signal.SIGINT, self.request_force_stop)
-        signal.signal(signal.SIGTERM, self.request_force_stop)
-
-        self.handle_warm_shutdown_request()
-        self._shutdown()
-
-    def _shutdown(self):
-        """
-        If shutdown is requested in the middle of a job, wait until
-        finish before shutting down and save the request in redis
-        """
-        if self.get_state() == WorkerStatus.BUSY:
-            self._stop_requested = True
-            self.set_shutdown_requested_date()
-            self.log.debug('Stopping after current horse is finished. Press Ctrl+C again for a cold shutdown.')
-            if self.scheduler:
-                self.stop_scheduler()
-        else:
-            if self.scheduler:
-                self.stop_scheduler()
-            raise StopRequested()
-
     def fork_work_horse(self, job: 'Job', queue: 'Queue'):
         """Spawns a work horse to perform the actual work and passes it a job.
         This is where the `fork()` actually happens.
@@ -1343,21 +1400,6 @@ class ForkWorker(BaseWorker):
         else:
             self._horse_pid = child_pid
             self.procline('Forked {0} at {1}'.format(child_pid, time.time()))
-
-    def get_heartbeat_ttl(self, job: 'Job') -> int:
-        """Get's the TTL for the next heartbeat.
-
-        Args:
-            job (Job): The Job
-
-        Returns:
-            int: The heartbeat TTL.
-        """
-        if job.timeout and job.timeout > 0:
-            remaining_execution_time = job.timeout - self.current_job_working_time
-            return int(min(remaining_execution_time, self.job_monitoring_interval)) + 60
-        else:
-            return self.job_monitoring_interval + 60
 
     def monitor_work_horse(self, job: 'Job', queue: 'Queue'):
         """The worker will monitor the work horse and make sure that it
@@ -1439,27 +1481,6 @@ class ForkWorker(BaseWorker):
         self.monitor_work_horse(job, queue)
         self.set_state(WorkerStatus.IDLE)
 
-    def maintain_heartbeats(self, job: 'Job'):
-        """Updates worker and job's last heartbeat field. If job was
-        enqueued with `result_ttl=0`, a race condition could happen where this heartbeat
-        arrives after job has been deleted, leaving a job key that contains only
-        `last_heartbeat` field.
-
-        hset() is used when updating job's timestamp. This command returns 1 if a new
-        Redis key is created, 0 otherwise. So in this case we check the return of job's
-        heartbeat() command. If a new key was created, this means the job was already
-        deleted. In this case, we simply send another delete command to remove the key.
-
-        https://github.com/rq/rq/issues/1450
-        """
-        with self.connection.pipeline() as pipeline:
-            self.heartbeat(self.job_monitoring_interval + 60, pipeline=pipeline)
-            ttl = self.get_heartbeat_ttl(job)
-            job.heartbeat(utcnow(), ttl, pipeline=pipeline, xx=True)
-            results = pipeline.execute()
-            if results[2] == 1:
-                self.connection.delete(job.key)
-
     def main_work_horse(self, job: 'Job', queue: 'Queue'):
         """This is the entry point of the newly spawned work horse.
         After fork()'ing, always assure we are generating random sequences
@@ -1491,54 +1512,42 @@ class ForkWorker(BaseWorker):
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
-    def prepare_job_execution(self, job: 'Job', remove_from_intermediate_queue: bool = False):
-        """Performs misc bookkeeping like updating states prior to
-        job execution.
-        """
-        self.log.debug('Preparing for execution of Job ID %s', job.id)
-        with self.connection.pipeline() as pipeline:
-            self.set_current_job_id(job.id, pipeline=pipeline)
-            self.set_current_job_working_time(0, pipeline=pipeline)
-
-            heartbeat_ttl = self.get_heartbeat_ttl(job)
-            self.heartbeat(heartbeat_ttl, pipeline=pipeline)
-            job.heartbeat(utcnow(), heartbeat_ttl, pipeline=pipeline)
-
-            job.prepare_for_execution(self.name, pipeline=pipeline)
-            if remove_from_intermediate_queue:
-                from .queue import Queue
-
-                queue = Queue(job.origin, connection=self.connection)
-                pipeline.lrem(queue.intermediate_queue_key, 1, job.id)
-            pipeline.execute()
-            self.log.debug('Job preparation finished.')
-
-        msg = 'Processing {0} from {1} since {2}'
-        self.procline(msg.format(job.func_name, job.origin, time.time()))
-
-    def pop_exc_handler(self):
-        """Pops the latest exception handler off of the exc handler stack."""
-        return self._exc_handlers.pop()
-
     def handle_work_horse_killed(self, job, retpid, ret_val, rusage):
         if self._work_horse_killed_handler is None:
             return
 
         self._work_horse_killed_handler(job, retpid, ret_val, rusage)
 
-    def __eq__(self, other):
-        """Equality does not take the database/connection into account"""
-        if not isinstance(other, self.__class__):
-            raise TypeError('Cannot compare workers to other types (of workers)')
-        return self.name == other.name
+    def request_force_stop(self, signum: int, frame: Optional[FrameType]):
+        """Terminates the application (cold shutdown).
 
-    def __hash__(self):
-        """The hash does not take the database/connection into account"""
-        return hash(self.name)
+        Args:
+            signum (Any): Signum
+            frame (Any): Frame
 
-    def handle_payload(self, message):
-        """Handle external commands"""
-        self.log.debug('Received message: %s', message)
-        payload = parse_payload(message)
-        handle_command(self, payload)
+        Raises:
+            SystemExit: SystemExit
+        """
+        # When worker is run through a worker pool, it may receive duplicate signals
+        # One is sent by the pool when it calls `pool.stop_worker()` and another is sent by the OS
+        # when user hits Ctrl+C. In this case if we receive the second signal within 1 second,
+        # we ignore it.
+        if (utcnow() - self._shutdown_requested_date) < timedelta(seconds=1):  # type: ignore
+            self.log.debug('Shutdown signal ignored, received twice in less than 1 second')
+            return
 
+        self.log.warning('Cold shut down')
+
+        # Take down the horse with the worker
+        if self.horse_pid:
+            self.log.debug('Taking down horse %s with me', self.horse_pid)
+            self.kill_horse()
+            self.wait_for_horse()
+        raise SystemExit()
+
+    def teardown(self):
+        if not self.is_horse:
+            if self.scheduler:
+                self.stop_scheduler()
+            self.register_death()
+            self.unsubscribe()

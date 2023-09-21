@@ -379,37 +379,6 @@ class TestWorker(RQTestCase):
             self.assertEqual(result.exc_string, job.exc_info)
             self.assertEqual(result.type, Result.Type.FAILED)
 
-    def test_horse_fails(self):
-        """Tests that job status is set to FAILED even if horse unexpectedly fails"""
-        q = Queue()
-        self.assertEqual(q.count, 0)
-
-        # Action
-        job = q.enqueue(say_hello)
-        self.assertEqual(q.count, 1)
-
-        # keep for later
-        enqueued_at_date = str(job.enqueued_at)
-
-        w = ForkWorker([q])
-        with mock.patch.object(w, 'perform_job', new_callable=raise_exc_mock):
-            w.work(burst=True)  # should silently pass
-
-        # Postconditions
-        self.assertEqual(q.count, 0)
-        failed_job_registry = FailedJobRegistry(queue=q)
-        self.assertTrue(job in failed_job_registry)
-        self.assertEqual(w.get_current_job_id(), None)
-
-        # Check the job
-        job = Job.fetch(job.id)
-        self.assertEqual(job.origin, q.name)
-
-        # Should be the original enqueued_at date, not the date of enqueueing
-        # to the failed queue
-        self.assertEqual(str(job.enqueued_at), enqueued_at_date)
-        self.assertTrue(job.exc_info)  # should contain exc_info
-
     def test_statistics(self):
         """Successful and failed job counts are saved properly"""
         queue = Queue(connection=self.connection)
@@ -1068,40 +1037,6 @@ class TestWorker(RQTestCase):
         worker.work(burst=True)
         self.assertEqual(self.testconn.zcard(registry.key), 0)
 
-    def test_job_dependency_race_condition(self):
-        """Dependencies added while the job gets finished shouldn't get lost."""
-
-        # This patches the enqueue_dependents to enqueue a new dependency AFTER
-        # the original code was executed.
-        orig_enqueue_dependents = Queue.enqueue_dependents
-
-        def new_enqueue_dependents(self, job, *args, **kwargs):
-            orig_enqueue_dependents(self, job, *args, **kwargs)
-            if hasattr(Queue, '_add_enqueue') and Queue._add_enqueue is not None and Queue._add_enqueue.id == job.id:
-                Queue._add_enqueue = None
-                Queue().enqueue_call(say_hello, depends_on=job)
-
-        Queue.enqueue_dependents = new_enqueue_dependents
-
-        q = Queue()
-        w = ForkWorker([q])
-        with mock.patch.object(ForkWorker, 'execute_job', wraps=w.execute_job) as mocked:
-            parent_job = q.enqueue(say_hello, result_ttl=0)
-            Queue._add_enqueue = parent_job
-            job = q.enqueue_call(say_hello, depends_on=parent_job)
-            w.work(burst=True)
-            job = Job.fetch(job.id)
-            self.assertEqual(job.get_status(), JobStatus.FINISHED)
-
-            # The created spy checks two issues:
-            # * before the fix of #739, 2 of the 3 jobs where executed due
-            #   to the race condition
-            # * during the development another issue was fixed:
-            #   due to a missing pipeline usage in Queue.enqueue_job, the job
-            #   which was enqueued before the "rollback" was executed twice.
-            #   So before that fix the call count was 4 instead of 3
-            self.assertEqual(mocked.call_count, 3)
-
     def test_self_modification_persistence(self):
         """Make sure that any meta modification done by
         the job itself persists completely through the
@@ -1250,20 +1185,6 @@ class TestWorker(RQTestCase):
         expected_ser.sort()
         self.assertEqual(sorted_ids, expected_ser)
 
-    def test_request_force_stop_ignores_consecutive_signals(self):
-        """Ignore signals sent within 1 second of the last signal"""
-        queue = Queue(connection=self.testconn)
-        worker = ForkWorker([queue])
-        worker._horse_pid = 1
-        worker._shutdown_requested_date = utcnow()
-        with mock.patch.object(worker, 'kill_horse') as mocked:
-            worker.request_force_stop(1, frame=None)
-            self.assertEqual(mocked.call_count, 0)
-        # If signal is sent a few seconds after, kill_horse() is called
-        worker._shutdown_requested_date = utcnow() - timedelta(seconds=2)
-        with mock.patch.object(worker, 'kill_horse') as mocked:
-            self.assertRaises(SystemExit, worker.request_force_stop, 1, frame=None)
-
     def test_dequeue_round_robin(self):
         qs = [Queue('q%d' % i) for i in range(5)]
 
@@ -1305,6 +1226,89 @@ class TestWorker(RQTestCase):
 def wait_and_kill_work_horse(pid, time_to_wait=0.0):
     time.sleep(time_to_wait)
     os.kill(pid, signal.SIGKILL)
+
+
+class TestForkWorker(RQTestCase):
+
+    def test_request_force_stop_ignores_consecutive_signals(self):
+        """Ignore signals sent within 1 second of the last signal"""
+        queue = Queue(connection=self.testconn)
+        worker = ForkWorker([queue])
+        worker._horse_pid = 1
+        worker._shutdown_requested_date = utcnow()
+        with mock.patch.object(worker, 'kill_horse') as mocked:
+            worker.request_force_stop(1, frame=None)
+            self.assertEqual(mocked.call_count, 0)
+        # If signal is sent a few seconds after, kill_horse() is called
+        worker._shutdown_requested_date = utcnow() - timedelta(seconds=2)
+        with mock.patch.object(worker, 'kill_horse') as mocked:
+            self.assertRaises(SystemExit, worker.request_force_stop, 1, frame=None)
+
+    def test_horse_fails(self):
+        """Tests that job status is set to FAILED even if horse unexpectedly fails"""
+        q = Queue()
+        self.assertEqual(q.count, 0)
+
+        # Action
+        job = q.enqueue(say_hello)
+        self.assertEqual(q.count, 1)
+
+        # keep for later
+        enqueued_at_date = str(job.enqueued_at)
+
+        w = ForkWorker([q])
+        with mock.patch.object(w, 'perform_job', new_callable=raise_exc_mock):
+            w.work(burst=True)  # should silently pass
+
+        # Postconditions
+        self.assertEqual(q.count, 0)
+        failed_job_registry = FailedJobRegistry(queue=q)
+        self.assertTrue(job in failed_job_registry)
+        self.assertEqual(w.get_current_job_id(), None)
+
+        # Check the job
+        job = Job.fetch(job.id)
+        self.assertEqual(job.origin, q.name)
+
+        # Should be the original enqueued_at date, not the date of enqueueing
+        # to the failed queue
+        self.assertEqual(str(job.enqueued_at), enqueued_at_date)
+        self.assertTrue(job.exc_info)  # should contain exc_info
+
+    def test_job_dependency_race_condition(self):
+        """Dependencies added while the job gets finished shouldn't get lost."""
+
+        # This patches the enqueue_dependents to enqueue a new dependency AFTER
+        # the original code was executed.
+        orig_enqueue_dependents = Queue.enqueue_dependents
+
+        def new_enqueue_dependents(self, job, *args, **kwargs):
+            orig_enqueue_dependents(self, job, *args, **kwargs)
+            if hasattr(Queue, '_add_enqueue') and Queue._add_enqueue is not None and Queue._add_enqueue.id == job.id:
+                Queue._add_enqueue = None
+                Queue().enqueue_call(say_hello, depends_on=job)
+
+        Queue.enqueue_dependents = new_enqueue_dependents
+
+        q = Queue()
+        w = ForkWorker([q])
+        with mock.patch.object(ForkWorker, 'execute_job', wraps=w.execute_job) as mocked:
+            parent_job = q.enqueue(say_hello, result_ttl=0)
+            Queue._add_enqueue = parent_job
+            job = q.enqueue_call(say_hello, depends_on=parent_job)
+            w.work(burst=True)
+            job = Job.fetch(job.id)
+            self.assertEqual(job.get_status(), JobStatus.FINISHED)
+
+            # The created spy checks two issues:
+            # * before the fix of #739, 2 of the 3 jobs where executed due
+            #   to the race condition
+            # * during the development another issue was fixed:
+            #   due to a missing pipeline usage in Queue.enqueue_job, the job
+            #   which was enqueued before the "rollback" was executed twice.
+            #   So before that fix the call count was 4 instead of 3
+            self.assertEqual(mocked.call_count, 3)
+
 
 
 class TimeoutTestCase:
