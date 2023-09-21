@@ -42,3 +42,25 @@ class StopRequested(Exception):
 
 class NoRedisConnectionException(Exception):
     pass
+
+
+class BaseTimeoutException(Exception):
+    """Base exception for timeouts."""
+
+    pass
+
+
+class JobTimeoutException(BaseTimeoutException):
+    """Raised when a job takes longer to complete than the allowed maximum
+    timeout value.
+    """
+
+    pass
+
+
+class HorseMonitorTimeoutException(BaseTimeoutException):
+    """Raised when waiting for a horse exiting takes longer than the maximum
+    timeout value.
+    """
+
+    pass
