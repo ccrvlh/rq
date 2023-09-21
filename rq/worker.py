@@ -1377,21 +1377,20 @@ class ForkWorker(BaseWorker):
         """Returns whether or not this is the worker or the work horse."""
         return self._is_horse
 
-    def kill_horse(self, sig: signal.Signals = SIGKILL):
-        """Kill the horse but catch "No such process" error has the horse could already be dead.
+    def setup_work_horse_signals(self):
+        """Setup signal handing for the newly spawned work horse
 
-        Args:
-            sig (signal.Signals, optional): _description_. Defaults to SIGKILL.
+        Always ignore Ctrl+C in the work horse, as it might abort the
+        currently running job.
+
+        The main worker catches the Ctrl+C and requests graceful shutdown
+        after the current work is done.  When cold shutdown is requested, it
+        kills the current job anyway.
         """
-        try:
-            os.killpg(os.getpgid(self.horse_pid), sig)
-            self.log.info('Killed horse pid %s', self.horse_pid)
-        except OSError as e:
-            if e.errno == errno.ESRCH:
-                # "No such process" is fine with us
-                self.log.debug('Horse already dead')
-            else:
-                raise
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+
+    # Work
 
     def wait_for_horse(self) -> Tuple[Optional[int], Optional[int], Optional['struct_rusage']]:
         """Waits for the horse process to complete.
@@ -1401,6 +1400,24 @@ class ForkWorker(BaseWorker):
         with contextlib.suppress(ChildProcessError):  # ChildProcessError: [Errno 10] No child processes
             pid, stat, rusage = os.wait4(self.horse_pid, 0)
         return pid, stat, rusage
+
+    def main_work_horse(self, job: 'Job', queue: 'Queue'):
+        """This is the entry point of the newly spawned work horse.
+        After fork()'ing, always assure we are generating random sequences
+        that are different from the worker.
+
+        os._exit() is the way to exit from childs after a fork(), in
+        contrast to the regular sys.exit()
+        """
+        random.seed()
+        self.setup_work_horse_signals()
+        self._is_horse = True
+        self.log = logger
+        try:
+            self.perform_job(job, queue)
+        except:  # noqa
+            os._exit(1)
+        os._exit(0)
 
     def fork_work_horse(self, job: 'Job', queue: 'Queue'):
         """Spawns a work horse to perform the actual work and passes it a job.
@@ -1420,6 +1437,17 @@ class ForkWorker(BaseWorker):
         else:
             self._horse_pid = child_pid
             self.procline('Forked {0} at {1}'.format(child_pid, time.time()))
+
+    def execute_job(self, job: 'Job', queue: 'Queue'):
+        """Spawns a work horse to perform the actual work and passes it a job.
+        The worker will wait for the work horse and make sure it executes
+        within the given timeout bounds, or will end the work horse with
+        SIGALRM.
+        """
+        self.set_state(WorkerStatus.BUSY)
+        self.fork_work_horse(job, queue)
+        self.monitor_work_horse(job, queue)
+        self.set_state(WorkerStatus.IDLE)
 
     def monitor_work_horse(self, job: 'Job', queue: 'Queue'):
         """The worker will monitor the work horse and make sure that it
@@ -1490,53 +1518,7 @@ class ForkWorker(BaseWorker):
             self.handle_work_horse_killed(job, retpid, ret_val, rusage)
             self.handle_job_failure(job, queue=queue, exc_string=exc_string)
 
-    def execute_job(self, job: 'Job', queue: 'Queue'):
-        """Spawns a work horse to perform the actual work and passes it a job.
-        The worker will wait for the work horse and make sure it executes
-        within the given timeout bounds, or will end the work horse with
-        SIGALRM.
-        """
-        self.set_state(WorkerStatus.BUSY)
-        self.fork_work_horse(job, queue)
-        self.monitor_work_horse(job, queue)
-        self.set_state(WorkerStatus.IDLE)
-
-    def main_work_horse(self, job: 'Job', queue: 'Queue'):
-        """This is the entry point of the newly spawned work horse.
-        After fork()'ing, always assure we are generating random sequences
-        that are different from the worker.
-
-        os._exit() is the way to exit from childs after a fork(), in
-        contrast to the regular sys.exit()
-        """
-        random.seed()
-        self.setup_work_horse_signals()
-        self._is_horse = True
-        self.log = logger
-        try:
-            self.perform_job(job, queue)
-        except:  # noqa
-            os._exit(1)
-        os._exit(0)
-
-    def setup_work_horse_signals(self):
-        """Setup signal handing for the newly spawned work horse
-
-        Always ignore Ctrl+C in the work horse, as it might abort the
-        currently running job.
-
-        The main worker catches the Ctrl+C and requests graceful shutdown
-        after the current work is done.  When cold shutdown is requested, it
-        kills the current job anyway.
-        """
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        signal.signal(signal.SIGTERM, signal.SIG_DFL)
-
-    def handle_work_horse_killed(self, job, retpid, ret_val, rusage):
-        if self._work_horse_killed_handler is None:
-            return
-
-        self._work_horse_killed_handler(job, retpid, ret_val, rusage)
+    # Cleanups
 
     def request_force_stop(self, signum: int, frame: Optional[FrameType]):
         """Terminates the application (cold shutdown).
@@ -1564,6 +1546,28 @@ class ForkWorker(BaseWorker):
             self.kill_horse()
             self.wait_for_horse()
         raise SystemExit()
+
+    def kill_horse(self, sig: signal.Signals = SIGKILL):
+        """Kill the horse but catch "No such process" error has the horse could already be dead.
+
+        Args:
+            sig (signal.Signals, optional): _description_. Defaults to SIGKILL.
+        """
+        try:
+            os.killpg(os.getpgid(self.horse_pid), sig)
+            self.log.info('Killed horse pid %s', self.horse_pid)
+        except OSError as e:
+            if e.errno == errno.ESRCH:
+                # "No such process" is fine with us
+                self.log.debug('Horse already dead')
+            else:
+                raise
+
+    def handle_work_horse_killed(self, job, retpid, ret_val, rusage):
+        if self._work_horse_killed_handler is None:
+            return
+
+        self._work_horse_killed_handler(job, retpid, ret_val, rusage)
 
     def teardown(self):
         if not self.is_horse:
