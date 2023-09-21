@@ -108,3 +108,5 @@ WORKERS_SUSPENDED = 'rq:suspended'
 WORKERS_BY_QUEUE_KEY = 'rq:workers:%s'
 REDIS_WORKER_KEYS = 'rq:workers'
 MAX_KEYS = 1000
+
+DEFAULT_CPU_THREADS = 5
