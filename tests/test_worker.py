@@ -7,15 +7,15 @@ import sys
 import threading
 import time
 import zlib
+import psutil
+import pytest
+import redis.exceptions
+
 from datetime import datetime, timedelta
 from multiprocessing import Process
 from time import sleep
 from unittest import mock, skipIf
 from unittest.mock import Mock
-
-import psutil
-import pytest
-import redis.exceptions
 from redis import Redis
 
 from rq import Queue, Worker, ForkWorker, get_current_connection

@@ -10,8 +10,6 @@ if TYPE_CHECKING:
 
 
 
-
-
 def is_suspended(connection: 'Redis', worker: Optional['BaseWorker'] = None):
     """Checks whether a Worker is suspendeed on a given connection
     PS: pipeline returns a list of responses

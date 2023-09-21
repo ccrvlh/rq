@@ -119,11 +119,6 @@ class RQScheduler:
                 ScheduledJobRegistry(name, connection=self.connection, serializer=self.serializer)
             )
 
-    @classmethod
-    def get_locking_key(cls, name: str):
-        """Returns scheduler key for a given queue name"""
-        return SCHEDULER_LOCKING_KEY_TEMPLATE % name
-
     def enqueue_scheduled_jobs(self):
         """Enqueue jobs whose timestamp is in the past"""
         self._status = self.Status.WORKING
@@ -210,6 +205,11 @@ class RQScheduler:
             self.enqueue_scheduled_jobs()
             self.heartbeat()
             time.sleep(self.interval)
+
+    @classmethod
+    def get_locking_key(cls, name: str):
+        """Returns scheduler key for a given queue name"""
+        return SCHEDULER_LOCKING_KEY_TEMPLATE % name
 
 
 def run(scheduler):

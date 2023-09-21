@@ -2,14 +2,9 @@ from unittest.mock import patch
 
 from rq import Queue, ForkWorker
 from rq.utils import ceildiv
-from rq.worker_registration import (
-    REDIS_WORKER_KEYS,
-    WORKERS_BY_QUEUE_KEY,
-    clean_worker_registry,
-    get_keys,
-    register,
-    unregister,
-)
+from rq.defaults import REDIS_WORKER_KEYS
+from rq.defaults import WORKERS_BY_QUEUE_KEY
+from rq.worker import BaseWorker
 from tests import RQTestCase
 
 
@@ -20,7 +15,7 @@ class TestWorkerRegistry(RQTestCase):
         bar_queue = Queue(name='bar')
         worker = ForkWorker([foo_queue, bar_queue])
 
-        register(worker)
+        BaseWorker.register(worker)
         redis = worker.connection
 
         self.assertTrue(redis.sismember(worker.redis_workers_keys, worker.key))
@@ -30,7 +25,7 @@ class TestWorkerRegistry(RQTestCase):
         self.assertTrue(redis.sismember(WORKERS_BY_QUEUE_KEY % bar_queue.name, worker.key))
         self.assertEqual(ForkWorker.count(queue=bar_queue), 1)
 
-        unregister(worker)
+        BaseWorker.unregister(worker)
         self.assertFalse(redis.sismember(worker.redis_workers_keys, worker.key))
         self.assertFalse(redis.sismember(WORKERS_BY_QUEUE_KEY % foo_queue.name, worker.key))
         self.assertFalse(redis.sismember(WORKERS_BY_QUEUE_KEY % bar_queue.name, worker.key))
@@ -45,38 +40,38 @@ class TestWorkerRegistry(RQTestCase):
         worker2 = ForkWorker([foo_queue])
         worker3 = ForkWorker([baz_queue])
 
-        self.assertEqual(set(), get_keys(foo_queue))
+        self.assertEqual(set(), BaseWorker.get_keys(foo_queue))
 
-        register(worker1)
-        register(worker2)
-        register(worker3)
+        BaseWorker.register(worker1)
+        BaseWorker.register(worker2)
+        BaseWorker.register(worker3)
 
         # get_keys(queue) will return worker keys for that queue
-        self.assertEqual(set([worker1.key, worker2.key]), get_keys(foo_queue))
-        self.assertEqual(set([worker1.key]), get_keys(bar_queue))
+        self.assertEqual(set([worker1.key, worker2.key]), BaseWorker.get_keys(foo_queue))
+        self.assertEqual(set([worker1.key]), BaseWorker.get_keys(bar_queue))
 
         # get_keys(connection=connection) will return all worker keys
-        self.assertEqual(set([worker1.key, worker2.key, worker3.key]), get_keys(connection=worker1.connection))
+        self.assertEqual(set([worker1.key, worker2.key, worker3.key]), BaseWorker.get_keys(connection=worker1.connection))
 
         # Calling get_keys without arguments raises an exception
-        self.assertRaises(ValueError, get_keys)
+        self.assertRaises(ValueError, BaseWorker.get_keys)
 
-        unregister(worker1)
-        unregister(worker2)
-        unregister(worker3)
+        BaseWorker.unregister(worker1)
+        BaseWorker.unregister(worker2)
+        BaseWorker.unregister(worker3)
 
     def test_clean_registry(self):
         """clean_registry removes worker keys that don't exist in Redis"""
         queue = Queue(name='foo')
         worker = ForkWorker([queue])
 
-        register(worker)
+        BaseWorker.register(worker)
         redis = worker.connection
 
         self.assertTrue(redis.sismember(worker.redis_workers_keys, worker.key))
         self.assertTrue(redis.sismember(REDIS_WORKER_KEYS, worker.key))
 
-        clean_worker_registry(queue)
+        BaseWorker.clean_worker_registry(queue)
         self.assertFalse(redis.sismember(worker.redis_workers_keys, worker.key))
         self.assertFalse(redis.sismember(REDIS_WORKER_KEYS, worker.key))
 
@@ -93,9 +88,9 @@ class TestWorkerRegistry(RQTestCase):
         queue = Queue(name='foo')
         for i in range(MAX_WORKERS):
             worker = ForkWorker([queue])
-            register(worker)
+            BaseWorker.register(worker)
 
-        with patch('rq.worker_registration.MAX_KEYS', MAX_KEYS), patch.object(
+        with patch('rq.defaults.MAX_KEYS', MAX_KEYS), patch.object(
             queue.connection, 'pipeline', wraps=queue.connection.pipeline
         ) as pipeline_mock:
             # clean_worker_registry creates a pipeline with a context manager. Configure the mock using the context
@@ -103,7 +98,7 @@ class TestWorkerRegistry(RQTestCase):
             pipeline_mock.return_value.__enter__.return_value.srem.return_value = None
             pipeline_mock.return_value.__enter__.return_value.execute.return_value = [0] * MAX_WORKERS
 
-            clean_worker_registry(queue)
+            BaseWorker.clean_worker_registry(queue)
 
             expected_call_count = (ceildiv(MAX_WORKERS, MAX_KEYS)) * SREM_CALL_COUNT
             self.assertEqual(pipeline_mock.return_value.__enter__.return_value.srem.call_count, expected_call_count)

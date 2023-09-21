@@ -27,9 +27,12 @@ from uuid import uuid4
 from redis import Redis
 from contextlib import suppress
 
-from rq import worker_registration
-from rq.command import PUBSUB_CHANNEL_TEMPLATE, handle_command, parse_payload
-from rq.connections import get_current_connection, pop_connection, push_connection
+from rq.command import handle_command
+from rq.command import parse_payload
+from rq.command import PUBSUB_CHANNEL_TEMPLATE
+from rq.connections import get_current_connection
+from rq.connections import pop_connection
+from rq.connections import push_connection
 from rq.defaults import (
     DEFAULT_JOB_MONITORING_INTERVAL,
     DEFAULT_LOGGING_DATE_FORMAT,
@@ -90,7 +93,7 @@ class BaseWorker:
     redis_worker_namespace_prefix = 'rq:worker:'
     """ The Redis key namespace used for all keys set by RQ for a worker. """
 
-    redis_workers_keys = worker_registration.REDIS_WORKER_KEYS
+    redis_workers_keys = REDIS_WORKER_KEYS
     """ The Redis key namespace used for all keys set by RQ for a worker. """
 
     death_penalty_class = UnixSignalDeathPenalty
@@ -471,7 +474,7 @@ class BaseWorker:
         with self.connection.pipeline() as p:
             p.delete(key)
             now = utils.utcnow()
-            now_in_string = utils.utils.utcformat(now)
+            now_in_string = utils.utcformat(now)
             self.birth_date = now
 
             mapping = {
@@ -490,7 +493,7 @@ class BaseWorker:
             else:
                 p.hmset(key, mapping)
 
-            worker_registration.register(self, p)
+            self.register(self, p)
             p.expire(key, self.worker_ttl + 60)
             p.execute()
 
@@ -500,7 +503,7 @@ class BaseWorker:
         with self.connection.pipeline() as p:
             # We cannot use self.state = 'dead' here, because that would
             # rollback the pipeline
-            worker_registration.unregister(self, p)
+            BaseWorker.unregister(self, p)
             p.hset(self.key, 'death', utils.utcformat(utils.utcnow()))
             p.expire(self.key, 60)
             p.execute()
@@ -601,7 +604,7 @@ class BaseWorker:
             if queue.acquire_maintenance_lock():
                 self.log.info('Cleaning registries for queue: %s', queue.name)
                 clean_registries(queue)
-                worker_registration.clean_worker_registry(queue)
+                BaseWorker.clean_worker_registry(queue)
                 clean_intermediate_queue(self, queue)
         self.last_cleaned_at = utils.utcnow()
 
@@ -1393,7 +1396,7 @@ class BaseWorker:
         elif connection is None:
             connection = get_current_connection()
 
-        worker_keys = worker_registration.get_keys(queue=queue, connection=connection)
+        worker_keys = BaseWorker.get_keys(queue=queue, connection=connection)
         workers = [
             cls.find_by_key(
                 key, connection=connection, job_class=job_class, queue_class=queue_class, serializer=serializer
@@ -1413,7 +1416,7 @@ class BaseWorker:
         Returns:
             list_keys (List[str]): A list of worker keys
         """
-        return [utils.as_text(key) for key in worker_registration.get_keys(queue=queue, connection=connection)]
+        return [utils.as_text(key) for key in BaseWorker.get_keys(queue=queue, connection=connection)]
 
     @classmethod
     def count(cls, connection: Optional['Redis'] = None, queue: Optional['Queue'] = None) -> int:
@@ -1426,7 +1429,7 @@ class BaseWorker:
         Returns:
             length (int): The queue length.
         """
-        return len(worker_registration.get_keys(queue=queue, connection=connection))
+        return len(BaseWorker.get_keys(queue=queue, connection=connection))
 
     def __eq__(self, other):
         """Equality does not take the database/connection into account"""
@@ -1463,7 +1466,7 @@ class Worker(BaseWorker):
 
 
 class ForkWorker(BaseWorker):
-    def __init__(self, queues, name: str | None = None, default_result_ttl=DEFAULT_RESULT_TTL, connection: Redis | None = None, exc_handler=None, exception_handlers=None, default_worker_ttl=DEFAULT_WORKER_TTL, maintenance_interval: int = DEFAULT_MAINTENANCE_TASK_INTERVAL, job_class: type[Job] | None = None, queue_class: type[Queue] | None = None, log_job_description: bool = True, job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL, disable_default_exception_handler: bool = False, prepare_for_work: bool = True, serializer=None, work_horse_killed_handler: Callable[[Job, int, int, struct_rusage], None] | None = None):
+    def __init__(self, queues, name: str | None = None, default_result_ttl=DEFAULT_RESULT_TTL, connection: Redis | None = None, exc_handler=None, exception_handlers=None, default_worker_ttl=DEFAULT_WORKER_TTL, maintenance_interval: int = DEFAULT_MAINTENANCE_TASK_INTERVAL, job_class: type[Job] | None = None, queue_class: type[Queue] | None = None, log_job_description: bool = True, job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL, disable_default_exception_handler: bool = False, prepare_for_work: bool = True, serializer=None, work_horse_killed_handler: Callable[[Job, int, int, 'struct_rusage'], None] | None = None):
         super().__init__(queues, name, default_result_ttl, connection, exc_handler, exception_handlers, default_worker_ttl, maintenance_interval, job_class, queue_class, log_job_description, job_monitoring_interval, disable_default_exception_handler, prepare_for_work, serializer)
         self._is_horse: bool = False
         self._horse_pid: int = 0

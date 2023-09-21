@@ -14,6 +14,7 @@ from redis.exceptions import ConnectionError
 
 from rq import Connection, Retry
 from rq import __version__ as version
+from rq import utils
 from rq.cli.helpers import (
     parse_function_args,
     parse_schedule,
@@ -37,17 +38,19 @@ from rq.defaults import (
     DEFAULT_WORKER_TTL,
 )
 from rq.exceptions import InvalidJobOperationError
-from rq.job import Job, JobStatus
+from rq.job import JobStatus
+from rq.job import Job
 from rq.logutils import blue
-from rq.registry import FailedJobRegistry, clean_registries
+from rq.registry import clean_registries
+from rq.registry import FailedJobRegistry
 from rq.serializers import DefaultSerializer
 from rq.suspension import is_suspended
 from rq.suspension import resume as connection_resume
 from rq.suspension import suspend as connection_suspend
 from rq.utils import get_call_string, import_attribute
+from rq.worker import BaseWorker
 from rq.worker import ForkWorker
 from rq.worker_pool import WorkerPool
-from rq.worker_registration import clean_worker_registry
 
 
 @click.group()
@@ -146,7 +149,7 @@ def info(cli_config, interval, raw, only_queues, only_workers, by_queue, queues,
 
             for queue in qs:
                 clean_registries(queue)
-                clean_worker_registry(queue)
+                BaseWorker.clean_worker_registry(queue)
 
             refresh(interval, func, qs, raw, by_queue, cli_config.queue_class, cli_config.worker_class)
     except ConnectionError as e:
@@ -478,7 +481,7 @@ def worker_pool(
     setup_loghandlers_from_args(verbose, quiet, date_format, log_format)
 
     if serializer:
-        serializer_class: Type[DefaultSerializer] = import_attribute(serializer)
+        serializer_class: Type[DefaultSerializer] = utils.import_attribute(serializer)
     else:
         serializer_class = DefaultSerializer
 

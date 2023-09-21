@@ -2,7 +2,8 @@
 
 from signal import signal
 from rq.exceptions import ShutDownImminentException
-from rq.worker import ForkWorker, signal_name
+from rq.utils import signal_name
+from rq.worker import ForkWorker
 
 
 class HerokuWorker(ForkWorker):

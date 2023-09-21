@@ -1,24 +1,30 @@
 import json
 import os
+import pytest
+
 from datetime import datetime, timedelta, timezone
 from time import sleep
 from uuid import uuid4
-
-import pytest
 from click.testing import CliRunner
 from redis import Redis
+from tests import RQTestCase
+from tests.fixtures import say_hello
+from tests.fixtures import div_by_zero
 
 from rq import Queue
 from rq.cli import main
-from rq.cli.helpers import CliConfig, parse_function_arg, parse_schedule, read_config_file
-from rq.job import Job, JobStatus
-from rq.registry import FailedJobRegistry, ScheduledJobRegistry
+from rq.cli.helpers import CliConfig, parse_function_arg
+from rq.cli.helpers import parse_schedule
+from rq.cli.helpers import read_config_file
+from rq.job import Job
+from rq.job import JobStatus
+from rq.registry import FailedJobRegistry
+from rq.registry import ScheduledJobRegistry
 from rq.scheduler import RQScheduler
 from rq.serializers import JSONSerializer
 from rq.timeouts import UnixSignalDeathPenalty
-from rq.worker import ForkWorker, WorkerStatus
-from tests import RQTestCase
-from tests.fixtures import div_by_zero, say_hello
+from rq.worker import WorkerStatus
+from rq.worker import ForkWorker
 
 
 class CLITestCase(RQTestCase):
