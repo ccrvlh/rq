@@ -1740,7 +1740,7 @@ class ThreadPoolWorker(BaseWorker):
         self.bootstrap(logging_level, date_format, log_format)
         completed_jobs = 0
         self.log.info("ThreadPoolWorker %s: started with %s threads, version %s", self.key, self.threadpool_size, VERSION)
-        self.log.warning("*** WARNING: ThreadPoolWorker is in beta and may be unstable. Don't use it in production!")
+        self.log.warning("*** WARNING: ThreadPoolWorker is in beta and unstable. DO NOT use it in production!")
         if with_scheduler:
             self._start_scheduler(burst, logging_level, date_format, log_format)
 
