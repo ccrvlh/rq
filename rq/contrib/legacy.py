@@ -1,6 +1,6 @@
 import logging
 
-from rq import Worker, get_current_connection
+from rq import ForkWorker, get_current_connection
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ def cleanup_ghosts(conn=None):
     This function will clean up any of such legacy ghosted workers.
     """
     conn = conn if conn else get_current_connection()
-    for worker in Worker.all(connection=conn):
+    for worker in ForkWorker.all(connection=conn):
         if conn.ttl(worker.key) == -1:
             ttl = worker.worker_ttl
             conn.expire(worker.key, ttl)

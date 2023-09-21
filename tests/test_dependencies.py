@@ -1,4 +1,4 @@
-from rq import Queue, SimpleWorker, Worker
+from rq import Queue, Worker, ForkWorker
 from rq.job import Dependency, Job, JobStatus
 from tests import RQTestCase
 from tests.fixtures import check_dependencies_are_met, div_by_zero, say_hello
@@ -27,7 +27,7 @@ class TestDependencies(RQTestCase):
     def test_job_dependency(self):
         """Enqueue dependent jobs only when appropriate"""
         q = Queue(connection=self.testconn)
-        w = SimpleWorker([q], connection=q.connection)
+        w = Worker([q], connection=q.connection)
 
         # enqueue dependent job when parent successfully finishes
         parent_job = q.enqueue(say_hello)
@@ -106,7 +106,7 @@ class TestDependencies(RQTestCase):
     def test_multiple_jobs_with_dependencies(self):
         """Enqueue dependent jobs only when appropriate"""
         q = Queue(connection=self.testconn)
-        w = SimpleWorker([q], connection=q.connection)
+        w = Worker([q], connection=q.connection)
 
         # Multiple jobs are enqueued with correct status
         parent_job = q.enqueue(say_hello)
@@ -126,7 +126,7 @@ class TestDependencies(RQTestCase):
     def test_dependency_list_in_depends_on(self):
         """Enqueue with Dependency list in depends_on"""
         q = Queue(connection=self.testconn)
-        w = SimpleWorker([q], connection=q.connection)
+        w = Worker([q], connection=q.connection)
 
         # enqueue dependent job when parent successfully finishes
         parent_job1 = q.enqueue(say_hello)
@@ -138,7 +138,7 @@ class TestDependencies(RQTestCase):
     def test_enqueue_job_dependency(self):
         """Enqueue via Queue.enqueue_job() with depencency"""
         q = Queue(connection=self.testconn)
-        w = SimpleWorker([q], connection=q.connection)
+        w = Worker([q], connection=q.connection)
 
         # enqueue dependent job when parent successfully finishes
         parent_job = Job.create(say_hello)
@@ -168,7 +168,7 @@ class TestDependencies(RQTestCase):
 
         dependency_job = queue.enqueue(say_hello, result_ttl=0)
 
-        w = Worker([queue])
+        w = ForkWorker([queue])
         w.work(burst=True)
 
         assert queue.enqueue(say_hello, depends_on=dependency_job)
@@ -179,7 +179,7 @@ class TestDependencies(RQTestCase):
         dependency_job = queue.enqueue(say_hello, result_ttl=0)
         dependent_job = queue.enqueue(say_hello, depends_on=dependency_job)
 
-        w = Worker([queue])
+        w = ForkWorker([queue])
         w.work(burst=True, max_jobs=1)
 
         assert dependent_job.dependencies_are_met()
@@ -193,6 +193,6 @@ class TestDependencies(RQTestCase):
         job_c = queue.enqueue(check_dependencies_are_met, job_id="C", depends_on=["A", "B"])
 
         job_c.dependencies_are_met()
-        w = Worker([queue])
+        w = ForkWorker([queue])
         w.work(burst=True)
         assert job_c.result

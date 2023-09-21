@@ -19,7 +19,7 @@ from .job import Job
 from .logutils import setup_loghandlers
 from .queue import Queue
 from .utils import parse_names
-from .worker import BaseWorker, Worker
+from .worker import BaseWorker, ForkWorker
 
 
 class WorkerData(NamedTuple):
@@ -39,14 +39,14 @@ class WorkerPool:
         queues: List[Union[str, Queue]],
         connection: Redis,
         num_workers: int = 1,
-        worker_class: Type[BaseWorker] = Worker,
+        worker_class: Type[BaseWorker] = ForkWorker,
         serializer: Type[DefaultSerializer] = DefaultSerializer,
         job_class: Type[Job] = Job,
         *args,
         **kwargs,
     ):
         self.num_workers: int = num_workers
-        self._workers: List[Worker] = []
+        self._workers: List[ForkWorker] = []
         setup_loghandlers('INFO', DEFAULT_LOGGING_DATE_FORMAT, DEFAULT_LOGGING_FORMAT, name=__name__)
         self.log: logging.Logger = logging.getLogger(__name__)
         # self.log: logging.Logger = logger
@@ -233,7 +233,7 @@ def run_worker(
     connection_class,
     connection_pool_class,
     connection_pool_kwargs: dict,
-    worker_class: Type[BaseWorker] = Worker,
+    worker_class: Type[BaseWorker] = ForkWorker,
     serializer: Type[DefaultSerializer] = DefaultSerializer,
     job_class: Type[Job] = Job,
     burst: bool = True,

@@ -12,7 +12,7 @@ from rq.queue import Queue
 from rq.registry import StartedJobRegistry
 from rq.results import Result, get_key
 from rq.utils import get_version, utcnow
-from rq.worker import Worker
+from rq.worker import ForkWorker
 from tests import RQTestCase
 
 from .fixtures import div_by_zero, say_hello
@@ -104,7 +104,7 @@ class TestScheduledJobRegistry(RQTestCase):
         """Changes to job.result handling should be backwards compatible."""
         queue = Queue(connection=self.connection)
         job = queue.enqueue(say_hello)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         worker.register_birth()
 
         self.assertEqual(worker.failed_job_count, 0)
@@ -126,7 +126,7 @@ class TestScheduledJobRegistry(RQTestCase):
             with patch('rq.job.Job.supports_redis_streams', new_callable=PropertyMock) as job_mock:
                 job_mock.return_value = False
                 mock.return_value = False
-                worker = Worker([queue])
+                worker = ForkWorker([queue])
                 worker.register_birth()
                 job = queue.enqueue(say_hello)
                 job._result = 'Success'
@@ -147,7 +147,7 @@ class TestScheduledJobRegistry(RQTestCase):
         """Changes to job.result failure handling should be backwards compatible."""
         queue = Queue(connection=self.connection)
         job = queue.enqueue(say_hello)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         worker.register_birth()
 
         self.assertEqual(worker.failed_job_count, 0)
@@ -168,7 +168,7 @@ class TestScheduledJobRegistry(RQTestCase):
             with patch('rq.job.Job.supports_redis_streams', new_callable=PropertyMock) as job_mock:
                 job_mock.return_value = False
                 mock.return_value = False
-                worker = Worker([queue])
+                worker = ForkWorker([queue])
                 worker.register_birth()
 
                 job = queue.enqueue(say_hello)

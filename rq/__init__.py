@@ -3,7 +3,7 @@ from .connections import Connection, get_current_connection, pop_connection, pus
 from .job import Callback, Retry, cancel_job, get_current_job, requeue_job
 from .queue import Queue
 from .version import VERSION
-from .worker import SimpleWorker, Worker
+from .worker import Worker, ForkWorker
 
 __all__ = [
     "Connection",
@@ -16,8 +16,8 @@ __all__ = [
     "get_current_job",
     "requeue_job",
     "Queue",
-    "SimpleWorker",
     "Worker",
+    "ForkWorker",
 ]
 
 __version__ = VERSION

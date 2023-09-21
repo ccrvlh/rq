@@ -22,7 +22,7 @@ from rq.registry import (
 )
 from rq.serializers import JSONSerializer
 from rq.utils import as_text, get_version, utcformat, utcnow
-from rq.worker import Worker
+from rq.worker import ForkWorker
 from tests import RQTestCase, fixtures
 
 
@@ -534,7 +534,7 @@ class TestJob(RQTestCase):
         """The current job is accessible within the job function."""
         q = Queue()
         job = q.enqueue(fixtures.access_self)
-        w = Worker([q])
+        w = ForkWorker([q])
         w.work(burst=True)
         # access_self calls get_current_job() and executes successfully
         self.assertEqual(job.get_status(), JobStatus.FINISHED)
@@ -942,7 +942,7 @@ class TestJob(RQTestCase):
 
         self.assertEqual(1, len(queue.get_jobs()))
         self.assertEqual(1, len(queue.deferred_job_registry))
-        w = Worker([queue])
+        w = ForkWorker([queue])
         w.work(burst=True, max_jobs=1)
         self.assertTrue(dependency.dependent_ids)
         print('# Post work', self.testconn.smembers(dependency.dependents_key))

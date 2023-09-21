@@ -19,7 +19,7 @@ from rq.utils import (
     truncate_long_string,
     utcparse,
 )
-from rq.worker import SimpleWorker
+from rq.worker import Worker
 from tests import RQTestCase, fixtures
 
 
@@ -114,7 +114,7 @@ class TestUtils(RQTestCase):
     def test_import_attribute(self):
         """Ensure get_version works properly"""
         self.assertEqual(import_attribute('rq.utils.get_version'), get_version)
-        self.assertEqual(import_attribute('rq.worker.SimpleWorker'), SimpleWorker)
+        self.assertEqual(import_attribute('rq.worker.SimpleWorker'), Worker)
         self.assertRaises(ValueError, import_attribute, 'non.existent.module')
         self.assertRaises(ValueError, import_attribute, 'rq.worker.WrongWorker')
 

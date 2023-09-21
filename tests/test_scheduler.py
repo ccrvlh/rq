@@ -13,7 +13,7 @@ from rq.registry import FinishedJobRegistry, ScheduledJobRegistry
 from rq.scheduler import RQScheduler
 from rq.serializers import JSONSerializer
 from rq.utils import current_timestamp
-from rq.worker import Worker
+from rq.worker import ForkWorker
 from tests import RQTestCase, find_empty_redis_database, ssl_test
 
 from .fixtures import kill_worker, say_hello
@@ -321,11 +321,11 @@ class TestWorker(RQTestCase):
     def test_work_burst(self):
         """worker.work() with scheduler enabled works properly"""
         queue = Queue(connection=self.testconn)
-        worker = Worker(queues=[queue], connection=self.testconn)
+        worker = ForkWorker(queues=[queue], connection=self.testconn)
         worker.work(burst=True, with_scheduler=False)
         self.assertIsNone(worker.scheduler)
 
-        worker = Worker(queues=[queue], connection=self.testconn)
+        worker = ForkWorker(queues=[queue], connection=self.testconn)
         worker.work(burst=True, with_scheduler=True)
         self.assertIsNotNone(worker.scheduler)
         self.assertIsNone(self.testconn.get(worker.scheduler.get_locking_key('default')))
@@ -334,7 +334,7 @@ class TestWorker(RQTestCase):
     def test_run_maintenance_tasks(self, mocked):
         """scheduler.acquire_locks() is called only when scheduled is enabled"""
         queue = Queue(connection=self.testconn)
-        worker = Worker(queues=[queue], connection=self.testconn)
+        worker = ForkWorker(queues=[queue], connection=self.testconn)
 
         worker.run_maintenance_tasks()
         self.assertEqual(mocked.call_count, 0)
@@ -367,7 +367,7 @@ class TestWorker(RQTestCase):
 
     def test_work(self):
         queue = Queue(connection=self.testconn)
-        worker = Worker(queues=[queue], connection=self.testconn)
+        worker = ForkWorker(queues=[queue], connection=self.testconn)
         p = Process(target=kill_worker, args=(os.getpid(), False, 5))
 
         p.start()
@@ -382,7 +382,7 @@ class TestWorker(RQTestCase):
     def test_work_with_ssl(self):
         connection = find_empty_redis_database(ssl=True)
         queue = Queue(connection=connection)
-        worker = Worker(queues=[queue], connection=connection)
+        worker = ForkWorker(queues=[queue], connection=connection)
         p = Process(target=kill_worker, args=(os.getpid(), False, 5))
 
         p.start()
@@ -395,7 +395,7 @@ class TestWorker(RQTestCase):
 
     def test_work_with_serializer(self):
         queue = Queue(connection=self.testconn, serializer=JSONSerializer)
-        worker = Worker(queues=[queue], connection=self.testconn, serializer=JSONSerializer)
+        worker = ForkWorker(queues=[queue], connection=self.testconn, serializer=JSONSerializer)
         p = Process(target=kill_worker, args=(os.getpid(), False, 5))
 
         p.start()

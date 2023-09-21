@@ -7,7 +7,7 @@ from rq.connections import parse_connection
 from rq.job import JobStatus
 from rq.queue import Queue
 from rq.serializers import JSONSerializer
-from rq.worker import SimpleWorker
+from rq.worker import Worker
 from rq.worker_pool import WorkerPool, run_worker
 from tests import TestCase
 from tests.fixtures import CustomJob, _send_shutdown_command, long_running_job, say_hello
@@ -117,7 +117,7 @@ class TestWorkerPool(TestCase):
         """Ensure arguments are properly used to create the right workers"""
         queue = Queue('foo', connection=self.connection)
         job = queue.enqueue(say_hello)
-        pool = WorkerPool([queue], connection=self.connection, num_workers=2, worker_class=SimpleWorker)
+        pool = WorkerPool([queue], connection=self.connection, num_workers=2, worker_class=Worker)
         pool.start(burst=True)
         # Worker should have processed the job
         self.assertEqual(job.get_status(refresh=True), JobStatus.FINISHED)
@@ -125,7 +125,7 @@ class TestWorkerPool(TestCase):
         queue = Queue('json', connection=self.connection, serializer=JSONSerializer)
         job = queue.enqueue(say_hello, 'Hello')
         pool = WorkerPool(
-            [queue], connection=self.connection, num_workers=2, worker_class=SimpleWorker, serializer=JSONSerializer
+            [queue], connection=self.connection, num_workers=2, worker_class=Worker, serializer=JSONSerializer
         )
         pool.start(burst=True)
         # Worker should have processed the job

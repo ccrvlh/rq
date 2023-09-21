@@ -7,7 +7,6 @@ A worker is a Python process that typically runs in the background and exists
 solely as a work horse to perform lengthy or blocking tasks that you don't want
 to perform inside web processes.
 
-
 ## Starting Workers
 
 To start crunching work, simply start a worker from the root of your project
@@ -25,13 +24,12 @@ Job ended normally without result
 Workers will read jobs from the given queues (the order is important) in an
 endless loop, waiting for new work to arrive when all jobs are done.
 
-Each worker will process a single job at a time.  Within a worker, there is no
-concurrent processing going on.  If you want to perform jobs concurrently,
+Each worker will process a single job at a time. Within a worker, there is no
+concurrent processing going on. If you want to perform jobs concurrently,
 simply start more workers.
 
 You should use process managers like [Supervisor](/patterns/supervisor/) or
 [systemd](/patterns/systemd/) to run RQ workers in production.
-
 
 ### Burst Mode
 
@@ -52,32 +50,31 @@ Registering death.
 This can be useful for batch work that needs to be processed periodically, or
 just to scale up your workers temporarily during peak periods.
 
-
 ### Worker Arguments
 
 In addition to `--burst`, `rq worker` also accepts these arguments:
 
-* `--url` or `-u`: URL describing Redis connection details (e.g `rq worker --url redis://:secrets@example.com:1234/9` or `rq worker --url unix:///var/run/redis/redis.sock`)
-* `--burst` or `-b`: run worker in burst mode (stops after all jobs in queue have been processed).
-* `--path` or `-P`: multiple import paths are supported (e.g `rq worker --path foo --path bar`)
-* `--config` or `-c`: path to module containing RQ settings.
-* `--results-ttl`: job results will be kept for this number of seconds (defaults to 500).
-* `--worker-class` or `-w`: RQ Worker class to use (e.g `rq worker --worker-class 'foo.bar.MyWorker'`)
-* `--job-class` or `-j`: RQ Job class to use.
-* `--queue-class`: RQ Queue class to use.
-* `--connection-class`: Redis connection class to use, defaults to `redis.StrictRedis`.
-* `--log-format`: Format for the worker logs, defaults to `'%(asctime)s %(message)s'`
-* `--date-format`: Datetime format for the worker logs, defaults to `'%H:%M:%S'`
-* `--disable-job-desc-logging`: Turn off job description logging.
-* `--max-jobs`: Maximum number of jobs to execute.
-_New in version 1.8.0._
-* `--serializer`: Path to serializer object (e.g "rq.serializers.DefaultSerializer" or "rq.serializers.JSONSerializer")
+- `--url` or `-u`: URL describing Redis connection details (e.g `rq worker --url redis://:secrets@example.com:1234/9` or `rq worker --url unix:///var/run/redis/redis.sock`)
+- `--burst` or `-b`: run worker in burst mode (stops after all jobs in queue have been processed).
+- `--path` or `-P`: multiple import paths are supported (e.g `rq worker --path foo --path bar`)
+- `--config` or `-c`: path to module containing RQ settings.
+- `--results-ttl`: job results will be kept for this number of seconds (defaults to 500).
+- `--worker-class` or `-w`: RQ Worker class to use (e.g `rq worker --worker-class 'foo.bar.MyWorker'`)
+- `--job-class` or `-j`: RQ Job class to use.
+- `--queue-class`: RQ Queue class to use.
+- `--connection-class`: Redis connection class to use, defaults to `redis.StrictRedis`.
+- `--log-format`: Format for the worker logs, defaults to `'%(asctime)s %(message)s'`
+- `--date-format`: Datetime format for the worker logs, defaults to `'%H:%M:%S'`
+- `--disable-job-desc-logging`: Turn off job description logging.
+- `--max-jobs`: Maximum number of jobs to execute.
+  _New in version 1.8.0._
+- `--serializer`: Path to serializer object (e.g "rq.serializers.DefaultSerializer" or "rq.serializers.JSONSerializer")
 
 _New in version 1.14.0._
-* `--dequeue-strategy`: The strategy to dequeue jobs from multiple queues (one of `default`, `random` or `round_robin`,  defaults to `default`)
-* `--max-idle-time`: if specified, worker will wait for X seconds for a job to arrive before shuttind down.
-* `--maintenance-interval`: defaults to 600 seconds. Runs maintenance tasks every X seconds.
 
+- `--dequeue-strategy`: The strategy to dequeue jobs from multiple queues (one of `default`, `random` or `round_robin`, defaults to `default`)
+- `--max-idle-time`: if specified, worker will wait for X seconds for a job to arrive before shuttind down.
+- `--maintenance-interval`: defaults to 600 seconds. Runs maintenance tasks every X seconds.
 
 ## Inside the worker
 
@@ -101,19 +98,18 @@ The life-cycle of a worker consists of a few phases:
    the job and its result to expire based on `result_ttl`. Job is also removed
    from `StartedJobRegistry` and added to to `FinishedJobRegistry` in the case
    of successful execution, or `FailedJobRegistry` in the case of failure.
-8. _Loop_.  Repeat from step 3.
-
+8. _Loop_. Repeat from step 3.
 
 ### Performance Notes
 
 Basically the `rq worker` shell script is a simple fetch-fork-execute loop.
 When a lot of your jobs do lengthy setups, or they all depend on the same set
 of modules, you pay this overhead each time you run a job (since you're doing
-the import _after_ the moment of forking).  This is clean, because RQ won't
+the import _after_ the moment of forking). This is clean, because RQ won't
 ever leak memory this way, but also slow.
 
 A pattern you can use to improve the throughput performance for these kind of
-jobs can be to import the necessary modules _before_ the fork.  There is no way
+jobs can be to import the necessary modules _before_ the fork. There is no way
 of telling RQ workers to perform this set up for you, but you can do it
 yourself before starting the work loop.
 
@@ -133,7 +129,6 @@ w = Worker(['default'], connection=Redis())
 w.work()
 ```
 
-
 ### Worker Names
 
 Workers are registered to the system under their names, which are generated
@@ -152,7 +147,6 @@ worker = Worker([queue], connection=redis, name='foo')
 ```
 
 [m]: /docs/monitoring/
-
 
 ### Retrieving Worker Information
 
@@ -179,16 +173,17 @@ print('Total working time: '+ worker.total_working_time)  # In seconds
 ```
 
 Aside from `worker.name`, worker also have the following properties:
-* `hostname` - the host where this worker is run
-* `pid` - worker's process ID
-* `queues` - queues on which this worker is listening for jobs
-* `state` - possible states are `suspended`, `started`, `busy` and `idle`
-* `current_job` - the job it's currently executing (if any)
-* `last_heartbeat` - the last time this worker was seen
-* `birth_date` - time of worker's instantiation
-* `successful_job_count` - number of jobs finished successfully
-* `failed_job_count` - number of failed jobs processed
-* `total_working_time` - amount of time spent executing jobs, in seconds
+
+- `hostname` - the host where this worker is run
+- `pid` - worker's process ID
+- `queues` - queues on which this worker is listening for jobs
+- `state` - possible states are `suspended`, `started`, `busy` and `idle`
+- `current_job` - the job it's currently executing (if any)
+- `last_heartbeat` - the last time this worker was seen
+- `birth_date` - time of worker's instantiation
+- `successful_job_count` - number of jobs finished successfully
+- `failed_job_count` - number of failed jobs processed
+- `total_working_time` - amount of time spent executing jobs, in seconds
 
 If you only want to know the number of workers for monitoring purposes,
 `Worker.count()` is much more performant.
@@ -210,7 +205,7 @@ workers = Worker.all(queue=queue)
 ## Worker with Custom Serializer
 
 When creating a worker, you can pass in a custom serializer that will be implicitly passed to the queue.
-Serializers used should have at least `loads` and `dumps` method. An example of creating a custom serializer 
+Serializers used should have at least `loads` and `dumps` method. An example of creating a custom serializer
 class can be found in serializers.py (rq.serializers.JSONSerializer).
 The default serializer used is `pickle`
 
@@ -232,10 +227,11 @@ w = Queue('foo', serializer=JSONSerializer)
 
 Queues will now use custom serializer
 
-
 ## Better worker process title
-Worker process will have a better title (as displayed by system tools such as ps and top) 
+
+Worker process will have a better title (as displayed by system tools such as ps and top)
 after you installed a third-party package `setproctitle`:
+
 ```sh
 pip install setproctitle
 ```
@@ -249,7 +245,6 @@ the work loop and gracefully register its own death.
 If, during this takedown phase, `SIGINT` or `SIGTERM` is received again, the
 worker will forcefully terminate the child process (sending it `SIGKILL`), but
 will still try to register its own death.
-
 
 ## Using a Config File
 
@@ -324,7 +319,7 @@ more common requests so far are:
 2. Using a job execution model that does not require `os.fork`.
 3. The ability to use different concurrency models such as
    `multiprocessing` or `gevent`.
-4. Using a custom strategy for dequeuing jobs from different queues. 
+4. Using a custom strategy for dequeuing jobs from different queues.
    See [link](#round-robin-and-random-strategies-for-dequeuing-jobs-from-queues).
 
 You can use the `-w` option to specify a different worker class to use:
@@ -332,7 +327,6 @@ You can use the `-w` option to specify a different worker class to use:
 ```console
 $ rq worker -w 'path.to.GeventWorker'
 ```
-
 
 ## Strategies for Dequeuing Jobs from Queues
 
@@ -346,10 +340,10 @@ when you have `q1`,`q2`,`q3`, the 1st dequeued job is taken from `q1`, the 2nd f
 the 3rd from `q3`, the 4th from `q1`, the 5th from `q2` and so on.
 To implement this strategy use `-ds round_robin` argument.
 
-To dequeue jobs from the different queues randomly,  use `-ds random` argument.
+To dequeue jobs from the different queues randomly, use `-ds random` argument.
 
 Deprecation Warning: Those strategies were formely being implemented by using the custom classes `rq.worker.RoundRobinWorker`
-and `rq.worker.RandomWorker`. As the `--dequeue-strategy` argument allows for this option to be used with any worker, those worker classes are deprecated and will be removed from future versions. 
+and `rq.worker.RandomWorker`. As the `--dequeue-strategy` argument allows for this option to be used with any worker, those worker classes are deprecated and where removed in v2.
 
 ## Custom Job and Queue Classes
 
@@ -378,7 +372,6 @@ queue = CustomQueue('default', connection=redis_conn)
 queue.enqueue(some_func)
 ```
 
-
 ## Custom DeathPenalty Classes
 
 When a Job times-out, the worker will try to kill it using the supplied
@@ -387,7 +380,6 @@ if you wish to attempt to kill jobs in an application specific or 'cleaner' mann
 
 DeathPenalty classes are constructed with the following arguments
 `BaseDeathPenalty(timeout, JobTimeoutException, job_id=job.id)`
-
 
 ## Custom Exception Handlers
 
@@ -407,8 +399,8 @@ If you want to disable RQ's default exception handler, use the `--disable-defaul
 $ rq worker --exception-handler 'path.to.my.ErrorHandler' --disable-default-exception-handler
 ```
 
-
 ## Sending Commands to Worker
+
 _New in version 1.6.0._
 
 Starting in version 1.6.0, workers use Redis' pubsub mechanism to listen to external commands while
@@ -449,8 +441,8 @@ for worker in workers:
       send_kill_horse_command(redis, worker.name)
 ```
 
-
 ### Stopping a Job
+
 _New in version 1.7.0._
 
 You can use `send_stop_job_command()` to tell a worker to immediately stop a currently executing job. A job that's stopped will be sent to [FailedJobRegistry](https://python-rq.org/docs/results/#dealing-with-exceptions).
@@ -484,11 +476,12 @@ rq worker-pool high default low -n 3
 ```
 
 Options:
-* `-u` or `--url <Redis connection URL>`: as defined in [redis-py's docs](https://redis.readthedocs.io/en/stable/connections.html#redis.Redis.from_url).
-* `-w` or `--worker-class <path.to.Worker>`: defaults to `rq.worker.Worker`. `rq.worker.SimpleWorker` is also an option.
-* `-n` or `--num-workers <number of worker>`: defaults to 2.
-* `-b` or `--burst`: run workers in burst mode (stops after all jobs in queue have been processed).
-* `-l` or `--logging-level <level>`: defaults to `INFO`. `DEBUG`, `WARNING`, `ERROR` and `CRITICAL` are supported.
-* `-S` or `--serializer <path.to.Serializer>`: defaults to `rq.serializers.DefaultSerializer`. `rq.serializers.JSONSerializer` is also included.
-* `-P` or `--path <path>`: multiple import paths are supported (e.g `rq worker --path foo --path bar`).
-* `-j` or `--job-class <path.to.Job>`: defaults to `rq.job.Job`.
+
+- `-u` or `--url <Redis connection URL>`: as defined in [redis-py's docs](https://redis.readthedocs.io/en/stable/connections.html#redis.Redis.from_url).
+- `-w` or `--worker-class <path.to.Worker>`: defaults to `rq.worker.Worker`. `rq.worker.SimpleWorker` is also an option.
+- `-n` or `--num-workers <number of worker>`: defaults to 2.
+- `-b` or `--burst`: run workers in burst mode (stops after all jobs in queue have been processed).
+- `-l` or `--logging-level <level>`: defaults to `INFO`. `DEBUG`, `WARNING`, `ERROR` and `CRITICAL` are supported.
+- `-S` or `--serializer <path.to.Serializer>`: defaults to `rq.serializers.DefaultSerializer`. `rq.serializers.JSONSerializer` is also included.
+- `-P` or `--path <path>`: multiple import paths are supported (e.g `rq worker --path foo --path bar`).
+- `-j` or `--job-class <path.to.Job>`: defaults to `rq.job.Job`.

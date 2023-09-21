@@ -18,7 +18,7 @@ import pytest
 import redis.exceptions
 from redis import Redis
 
-from rq import Queue, SimpleWorker, Worker, get_current_connection
+from rq import Queue, Worker, ForkWorker, get_current_connection
 from rq.defaults import DEFAULT_MAINTENANCE_TASK_INTERVAL
 from rq.job import Job, JobStatus, Retry
 from rq.registry import FailedJobRegistry, FinishedJobRegistry, StartedJobRegistry
@@ -27,7 +27,8 @@ from rq.serializers import JSONSerializer
 from rq.suspension import resume, suspend
 from rq.utils import as_text, get_version, utcnow
 from rq.version import VERSION
-from rq.worker import HerokuWorker, RandomWorker, RoundRobinWorker, WorkerStatus
+from rq.contrib.heroku import HerokuWorker
+from rq.worker import WorkerStatus
 from tests import RQTestCase, slow
 from tests.fixtures import (
     CustomJob,
@@ -59,11 +60,11 @@ class TestWorker(RQTestCase):
         """Worker creation using various inputs."""
 
         # With single string argument
-        w = Worker('foo')
+        w = ForkWorker('foo')
         self.assertEqual(w.queues[0].name, 'foo')
 
         # With list of strings
-        w = Worker(['foo', 'bar'])
+        w = ForkWorker(['foo', 'bar'])
         self.assertEqual(w.queues[0].name, 'foo')
         self.assertEqual(w.queues[1].name, 'bar')
 
@@ -71,36 +72,36 @@ class TestWorker(RQTestCase):
         self.assertEqual(w.queue_names(), ['foo', 'bar'])
 
         # With iterable of strings
-        w = Worker(iter(['foo', 'bar']))
+        w = ForkWorker(iter(['foo', 'bar']))
         self.assertEqual(w.queues[0].name, 'foo')
         self.assertEqual(w.queues[1].name, 'bar')
 
         # With single Queue
-        w = Worker(Queue('foo'))
+        w = ForkWorker(Queue('foo'))
         self.assertEqual(w.queues[0].name, 'foo')
 
         # With iterable of Queues
-        w = Worker(iter([Queue('foo'), Queue('bar')]))
+        w = ForkWorker(iter([Queue('foo'), Queue('bar')]))
         self.assertEqual(w.queues[0].name, 'foo')
         self.assertEqual(w.queues[1].name, 'bar')
 
         # With list of Queues
-        w = Worker([Queue('foo'), Queue('bar')])
+        w = ForkWorker([Queue('foo'), Queue('bar')])
         self.assertEqual(w.queues[0].name, 'foo')
         self.assertEqual(w.queues[1].name, 'bar')
 
         # With string and serializer
-        w = Worker('foo', serializer=json)
+        w = ForkWorker('foo', serializer=json)
         self.assertEqual(w.queues[0].name, 'foo')
 
         # With queue having serializer
-        w = Worker(Queue('foo'), serializer=json)
+        w = ForkWorker(Queue('foo'), serializer=json)
         self.assertEqual(w.queues[0].name, 'foo')
 
     def test_work_and_quit(self):
         """Worker processes work, then quits."""
         fooq, barq = Queue('foo'), Queue('bar')
-        w = Worker([fooq, barq])
+        w = ForkWorker([fooq, barq])
         self.assertEqual(w.work(burst=True), False, 'Did not expect any work on the queue.')
 
         fooq.enqueue(say_hello, name='Frank')
@@ -109,7 +110,7 @@ class TestWorker(RQTestCase):
     def test_work_and_quit_custom_serializer(self):
         """Worker processes work, then quits."""
         fooq, barq = Queue('foo', serializer=JSONSerializer), Queue('bar', serializer=JSONSerializer)
-        w = Worker([fooq, barq], serializer=JSONSerializer)
+        w = ForkWorker([fooq, barq], serializer=JSONSerializer)
         self.assertEqual(w.work(burst=True), False, 'Did not expect any work on the queue.')
 
         fooq.enqueue(say_hello, name='Frank')
@@ -120,14 +121,14 @@ class TestWorker(RQTestCase):
         foo_queue = Queue('foo')
         bar_queue = Queue('bar')
 
-        w1 = Worker([foo_queue, bar_queue], name='w1')
+        w1 = ForkWorker([foo_queue, bar_queue], name='w1')
         w1.register_birth()
-        w2 = Worker([foo_queue], name='w2')
+        w2 = ForkWorker([foo_queue], name='w2')
         w2.register_birth()
 
-        self.assertEqual(set(Worker.all(connection=foo_queue.connection)), set([w1, w2]))
-        self.assertEqual(set(Worker.all(queue=foo_queue)), set([w1, w2]))
-        self.assertEqual(set(Worker.all(queue=bar_queue)), set([w1]))
+        self.assertEqual(set(ForkWorker.all(connection=foo_queue.connection)), set([w1, w2]))
+        self.assertEqual(set(ForkWorker.all(queue=foo_queue)), set([w1, w2]))
+        self.assertEqual(set(ForkWorker.all(queue=bar_queue)), set([w1]))
 
         w1.register_death()
         w2.register_death()
@@ -135,36 +136,36 @@ class TestWorker(RQTestCase):
     def test_find_by_key(self):
         """Worker.find_by_key restores queues, state and job_id."""
         queues = [Queue('foo'), Queue('bar')]
-        w = Worker(queues)
+        w = ForkWorker(queues)
         w.register_death()
         w.register_birth()
         w.set_state(WorkerStatus.STARTED)
-        worker = Worker.find_by_key(w.key)
+        worker = ForkWorker.find_by_key(w.key)
         self.assertEqual(worker.queues, queues)
         self.assertEqual(worker.get_state(), WorkerStatus.STARTED)
         self.assertEqual(worker._job_id, None)
-        self.assertTrue(worker.key in Worker.all_keys(worker.connection))
+        self.assertTrue(worker.key in ForkWorker.all_keys(worker.connection))
         self.assertEqual(worker.version, VERSION)
 
         # If worker is gone, its keys should also be removed
         worker.connection.delete(worker.key)
-        Worker.find_by_key(worker.key)
-        self.assertFalse(worker.key in Worker.all_keys(worker.connection))
+        ForkWorker.find_by_key(worker.key)
+        self.assertFalse(worker.key in ForkWorker.all_keys(worker.connection))
 
-        self.assertRaises(ValueError, Worker.find_by_key, 'foo')
+        self.assertRaises(ValueError, ForkWorker.find_by_key, 'foo')
 
     def test_worker_ttl(self):
         """Worker ttl."""
-        w = Worker([])
+        w = ForkWorker([])
         w.register_birth()
-        [worker_key] = self.testconn.smembers(Worker.redis_workers_keys)
+        [worker_key] = self.testconn.smembers(ForkWorker.redis_workers_keys)
         self.assertIsNotNone(self.testconn.ttl(worker_key))
         w.register_death()
 
     def test_work_via_string_argument(self):
         """Worker processes work fed via string arguments."""
         q = Queue('foo')
-        w = Worker([q])
+        w = ForkWorker([q])
         job = q.enqueue('tests.fixtures.say_hello', name='Frank')
         self.assertEqual(w.work(burst=True), True, 'Expected at least some work done.')
         expected_result = 'Hi there, Frank!'
@@ -177,7 +178,7 @@ class TestWorker(RQTestCase):
     def test_job_times(self):
         """job times are set correctly."""
         q = Queue('foo')
-        w = Worker([q])
+        w = ForkWorker([q])
         before = utcnow()
         before = before.replace(microsecond=0)
         job = q.enqueue(say_hello)
@@ -215,7 +216,7 @@ class TestWorker(RQTestCase):
         self.assertEqual(q.count, 1)
 
         # All set, we're going to process it
-        w = Worker([q])
+        w = ForkWorker([q])
         w.work(burst=True)  # should silently pass
         self.assertEqual(q.count, 0)
 
@@ -264,7 +265,7 @@ class TestWorker(RQTestCase):
         self.assertEqual(q.count, 1)
 
         # Now we try to run the job...
-        w = Worker([q])
+        w = ForkWorker([q])
         job, queue = w.dequeue_job_and_maintain_ttl(10)
         w.perform_job(job, queue)
 
@@ -274,7 +275,7 @@ class TestWorker(RQTestCase):
     def test_heartbeat(self):
         """Heartbeat saves last_heartbeat"""
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
         w.register_birth()
 
         self.assertEqual(str(w.pid), as_text(self.testconn.hget(w.key, 'pid')))
@@ -282,7 +283,7 @@ class TestWorker(RQTestCase):
         last_heartbeat = self.testconn.hget(w.key, 'last_heartbeat')
         self.assertIsNotNone(self.testconn.hget(w.key, 'birth'))
         self.assertTrue(last_heartbeat is not None)
-        w = Worker.find_by_key(w.key)
+        w = ForkWorker.find_by_key(w.key)
         self.assertIsInstance(w.last_heartbeat, datetime)
 
         # worker.refresh() shouldn't fail if last_heartbeat is None
@@ -297,7 +298,7 @@ class TestWorker(RQTestCase):
     def test_maintain_heartbeats(self):
         """worker.maintain_heartbeats() shouldn't create new job keys"""
         queue = Queue(connection=self.testconn)
-        worker = Worker([queue], connection=self.testconn)
+        worker = ForkWorker([queue], connection=self.testconn)
         job = queue.enqueue(say_hello)
         worker.maintain_heartbeats(job)
         self.assertTrue(self.testconn.exists(worker.key))
@@ -310,11 +311,11 @@ class TestWorker(RQTestCase):
 
     @slow
     def test_heartbeat_survives_lost_connection(self):
-        with mock.patch.object(Worker, 'heartbeat') as mocked:
+        with mock.patch.object(ForkWorker, 'heartbeat') as mocked:
             # None -> Heartbeat is first called before the job loop
             mocked.side_effect = [None, redis.exceptions.ConnectionError()]
             q = Queue()
-            w = Worker([q])
+            w = ForkWorker([q])
             w.work(burst=True)
             # First call is prior to job loop, second raises the error,
             # third is successful, after "recovery"
@@ -323,7 +324,7 @@ class TestWorker(RQTestCase):
     def test_job_timeout_moved_to_failed_job_registry(self):
         """Jobs that run long are moved to FailedJobRegistry"""
         queue = Queue()
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         job = queue.enqueue(long_running_job, 5, job_timeout=1)
         worker.work(burst=True)
         self.assertIn(job, job.failed_job_registry)
@@ -334,7 +335,7 @@ class TestWorker(RQTestCase):
     def test_heartbeat_busy(self):
         """Periodic heartbeats while horse is busy with long jobs"""
         q = Queue()
-        w = Worker([q], job_monitoring_interval=5)
+        w = ForkWorker([q], job_monitoring_interval=5)
 
         for timeout, expected_heartbeats in [(2, 0), (7, 1), (12, 2)]:
             job = q.enqueue(long_running_job, args=(timeout,), job_timeout=30, result_ttl=-1)
@@ -356,7 +357,7 @@ class TestWorker(RQTestCase):
         # keep for later
         enqueued_at_date = str(job.enqueued_at)
 
-        w = Worker([q])
+        w = ForkWorker([q])
         w.work(burst=True)
 
         # Postconditions
@@ -390,7 +391,7 @@ class TestWorker(RQTestCase):
         # keep for later
         enqueued_at_date = str(job.enqueued_at)
 
-        w = Worker([q])
+        w = ForkWorker([q])
         with mock.patch.object(w, 'perform_job', new_callable=raise_exc_mock):
             w.work(burst=True)  # should silently pass
 
@@ -413,7 +414,7 @@ class TestWorker(RQTestCase):
         """Successful and failed job counts are saved properly"""
         queue = Queue(connection=self.connection)
         job = queue.enqueue(div_by_zero)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         worker.register_birth()
 
         self.assertEqual(worker.failed_job_count, 0)
@@ -447,7 +448,7 @@ class TestWorker(RQTestCase):
         job = queue.enqueue(div_by_zero, retry=retry)
         registry = FailedJobRegistry(queue=queue)
 
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
 
         # If job is configured to retry, it will be put back in the queue
         # and not put in the FailedJobRegistry.
@@ -479,7 +480,7 @@ class TestWorker(RQTestCase):
         """worker.total_working_time is stored properly"""
         queue = Queue()
         job = queue.enqueue(long_running_job, 0.05)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         worker.register_birth()
 
         worker.perform_job(job, queue)
@@ -495,7 +496,7 @@ class TestWorker(RQTestCase):
         queue = Queue()
         job1 = queue.enqueue(do_nothing)
         job2 = queue.enqueue(do_nothing)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         worker.work(max_jobs=1)
 
         self.assertEqual(JobStatus.FINISHED, job1.get_status())
@@ -509,7 +510,7 @@ class TestWorker(RQTestCase):
         queue = Queue(name='default', connection=self.testconn)
 
         job = queue.enqueue(div_by_zero)
-        worker = Worker([queue], disable_default_exception_handler=False)
+        worker = ForkWorker([queue], disable_default_exception_handler=False)
         worker.work(burst=True)
 
         registry = FailedJobRegistry(queue=queue)
@@ -518,7 +519,7 @@ class TestWorker(RQTestCase):
         # Job is not added to FailedJobRegistry if
         # disable_default_exception_handler is True
         job = queue.enqueue(div_by_zero)
-        worker = Worker([queue], disable_default_exception_handler=True)
+        worker = ForkWorker([queue], disable_default_exception_handler=True)
         worker.work(burst=True)
         self.assertFalse(job in registry)
 
@@ -542,7 +543,7 @@ class TestWorker(RQTestCase):
         self.assertEqual(q.count, 0)
         job = q.enqueue(div_by_zero)
 
-        w = Worker([q], exception_handlers=first_handler)
+        w = ForkWorker([q], exception_handlers=first_handler)
         w.work(burst=True)
 
         # Check the job
@@ -551,7 +552,7 @@ class TestWorker(RQTestCase):
         self.assertTrue(job.meta['first_handler'])
 
         job = q.enqueue(div_by_zero)
-        w = Worker([q], exception_handlers=[first_handler, second_handler])
+        w = ForkWorker([q], exception_handlers=[first_handler, second_handler])
         w.work(burst=True)
 
         # Both custom exception handlers are run
@@ -561,7 +562,7 @@ class TestWorker(RQTestCase):
         self.assertTrue(job.meta['second_handler'])
 
         job = q.enqueue(div_by_zero)
-        w = Worker([q], exception_handlers=[first_handler, black_hole, second_handler])
+        w = ForkWorker([q], exception_handlers=[first_handler, black_hole, second_handler])
         w.work(burst=True)
 
         # second_handler is not run since it's interrupted by black_hole
@@ -588,7 +589,7 @@ class TestWorker(RQTestCase):
         # Here, we cancel the job, so the sentinel file may not be created
         self.testconn.delete(job.key)
 
-        w = Worker([q])
+        w = ForkWorker([q])
         w.work(burst=True)
         assert q.count == 0
 
@@ -616,7 +617,7 @@ class TestWorker(RQTestCase):
         status_thread = threading.Thread(target=cancel_parent_job, args=(parent_job,))
         status_thread.start()
 
-        w = Worker([q])
+        w = ForkWorker([q])
         w.work(
             burst=True,
         )
@@ -641,7 +642,7 @@ class TestWorker(RQTestCase):
         job2 = q.enqueue(say_hello, depends_on=job, job_id="job2")
         job.cancel()
 
-        w = Worker([q])
+        w = ForkWorker([q])
         w.work(
             burst=True,
         )
@@ -666,7 +667,7 @@ class TestWorker(RQTestCase):
 
         job.cancel(enqueue_dependents=True)
 
-        w = Worker([q])
+        w = ForkWorker([q])
         w.work(
             burst=True,
         )
@@ -683,7 +684,7 @@ class TestWorker(RQTestCase):
     @slow
     def test_max_idle_time(self):
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
         q.enqueue(say_hello, args=('Frank',))
         self.assertIsNotNone(w.dequeue_job_and_maintain_ttl(1))
 
@@ -711,7 +712,7 @@ class TestWorker(RQTestCase):
         sentinel_file = '/tmp/.rq_sentinel'
 
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
 
         # Put it on the queue with a timeout value
         res = q.enqueue(create_file_after_timeout, args=(sentinel_file, 4), job_timeout=1)
@@ -733,7 +734,7 @@ class TestWorker(RQTestCase):
     def test_dequeue_job_and_maintain_ttl_non_blocking(self):
         """Not passing a timeout should return immediately with None as a result"""
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
 
         self.assertIsNone(w.dequeue_job_and_maintain_ttl(None))
 
@@ -743,10 +744,10 @@ class TestWorker(RQTestCase):
         connection_timeout params, takes into account 15 seconds gap (hard coded)
         """
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
         self.assertEqual(w.dequeue_timeout, 405)
         self.assertEqual(w.connection_timeout, 415)
-        w = Worker([q], default_worker_ttl=500)
+        w = ForkWorker([q], default_worker_ttl=500)
         self.assertEqual(w.dequeue_timeout, 485)
         self.assertEqual(w.connection_timeout, 495)
 
@@ -754,7 +755,7 @@ class TestWorker(RQTestCase):
         """Ensure that Worker properly sets result_ttl for individual jobs."""
         q = Queue()
         job = q.enqueue(say_hello, args=('Frank',), result_ttl=10)
-        w = Worker([q])
+        w = ForkWorker([q])
         self.assertIn(job.get_id().encode(), self.testconn.lrange(q.key, 0, -1))
         w.work(burst=True)
         self.assertNotEqual(self.testconn.ttl(job.key), 0)
@@ -762,7 +763,7 @@ class TestWorker(RQTestCase):
 
         # Job with -1 result_ttl don't expire
         job = q.enqueue(say_hello, args=('Frank',), result_ttl=-1)
-        w = Worker([q])
+        w = ForkWorker([q])
         self.assertIn(job.get_id().encode(), self.testconn.lrange(q.key, 0, -1))
         w.work(burst=True)
         self.assertEqual(self.testconn.ttl(job.key), -1)
@@ -770,7 +771,7 @@ class TestWorker(RQTestCase):
 
         # Job with result_ttl = 0 gets deleted immediately
         job = q.enqueue(say_hello, args=('Frank',), result_ttl=0)
-        w = Worker([q])
+        w = ForkWorker([q])
         self.assertIn(job.get_id().encode(), self.testconn.lrange(q.key, 0, -1))
         w.work(burst=True)
         self.assertEqual(self.testconn.get(job.key), None)
@@ -779,7 +780,7 @@ class TestWorker(RQTestCase):
     def test_worker_sets_job_status(self):
         """Ensure that worker correctly sets job status."""
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
 
         job = q.enqueue(say_hello)
         self.assertEqual(job.get_status(), JobStatus.QUEUED)
@@ -806,7 +807,7 @@ class TestWorker(RQTestCase):
     def test_get_current_job(self):
         """Ensure worker.get_current_job() works properly"""
         q = Queue()
-        worker = Worker([q])
+        worker = ForkWorker([q])
         job = q.enqueue_call(say_hello)
 
         self.assertEqual(self.testconn.hget(worker.key, 'current_job'), None)
@@ -817,40 +818,40 @@ class TestWorker(RQTestCase):
     def test_custom_job_class(self):
         """Ensure Worker accepts custom job class."""
         q = Queue()
-        worker = Worker([q], job_class=CustomJob)
+        worker = ForkWorker([q], job_class=CustomJob)
         self.assertEqual(worker.job_class, CustomJob)
 
     def test_custom_queue_class(self):
         """Ensure Worker accepts custom queue class."""
         q = CustomQueue()
-        worker = Worker([q], queue_class=CustomQueue)
+        worker = ForkWorker([q], queue_class=CustomQueue)
         self.assertEqual(worker.queue_class, CustomQueue)
 
     def test_custom_queue_class_is_not_global(self):
         """Ensure Worker custom queue class is not global."""
         q = CustomQueue()
-        worker_custom = Worker([q], queue_class=CustomQueue)
+        worker_custom = ForkWorker([q], queue_class=CustomQueue)
         q_generic = Queue()
-        worker_generic = Worker([q_generic])
+        worker_generic = ForkWorker([q_generic])
         self.assertEqual(worker_custom.queue_class, CustomQueue)
         self.assertEqual(worker_generic.queue_class, Queue)
-        self.assertEqual(Worker.queue_class, Queue)
+        self.assertEqual(ForkWorker.queue_class, Queue)
 
     def test_custom_job_class_is_not_global(self):
         """Ensure Worker custom job class is not global."""
         q = Queue()
-        worker_custom = Worker([q], job_class=CustomJob)
+        worker_custom = ForkWorker([q], job_class=CustomJob)
         q_generic = Queue()
-        worker_generic = Worker([q_generic])
+        worker_generic = ForkWorker([q_generic])
         self.assertEqual(worker_custom.job_class, CustomJob)
         self.assertEqual(worker_generic.job_class, Job)
-        self.assertEqual(Worker.job_class, Job)
+        self.assertEqual(ForkWorker.job_class, Job)
 
     def test_work_via_simpleworker(self):
         """Worker processes work, with forking disabled,
         then returns."""
         fooq, barq = Queue('foo'), Queue('bar')
-        w = SimpleWorker([fooq, barq])
+        w = Worker([fooq, barq])
         self.assertEqual(w.work(burst=True), False, 'Did not expect any work on the queue.')
 
         job = fooq.enqueue(say_pid)
@@ -861,7 +862,7 @@ class TestWorker(RQTestCase):
         """SimpleWorker's key must last longer than job.timeout when working"""
         queue = Queue('foo')
 
-        worker = SimpleWorker([queue])
+        worker = Worker([queue])
         job_timeout = 300
         job = queue.enqueue(save_key_ttl, worker.key, job_timeout=job_timeout)
         worker.work(burst=True)
@@ -872,7 +873,7 @@ class TestWorker(RQTestCase):
         """Prepare job execution does the necessary bookkeeping."""
         queue = Queue(connection=self.testconn)
         job = queue.enqueue(say_hello)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         worker.prepare_job_execution(job)
 
         # Updates working queue
@@ -894,7 +895,7 @@ class TestWorker(RQTestCase):
 
         Queue.dequeue_any([queue], timeout=None, connection=self.testconn)
         self.assertIsNotNone(self.testconn.lpos(queue.intermediate_queue_key, job.id))
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         worker.prepare_job_execution(job, remove_from_intermediate_queue=True)
         self.assertIsNone(self.testconn.lpos(queue.intermediate_queue_key, job.id))
         self.assertEqual(queue.count, 0)
@@ -904,14 +905,14 @@ class TestWorker(RQTestCase):
         """Worker removes job from intermediate queue."""
         queue = Queue(connection=self.testconn)
         job = queue.enqueue(say_hello)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         worker.work(burst=True)
         self.assertIsNone(self.testconn.lpos(queue.intermediate_queue_key, job.id))
 
     def test_work_unicode_friendly(self):
         """Worker processes work with unicode description, then quits."""
         q = Queue('foo')
-        w = Worker([q])
+        w = ForkWorker([q])
         job = q.enqueue('tests.fixtures.say_hello', name='Adam', description='你好 世界!')
         self.assertEqual(w.work(burst=True), True, 'Expected at least some work done.')
         self.assertEqual(job.result, 'Hi there, Adam!')
@@ -921,7 +922,7 @@ class TestWorker(RQTestCase):
         """Worker process work with unicode or str other than pure ascii content,
         logging work properly"""
         q = Queue("foo")
-        w = Worker([q])
+        w = ForkWorker([q])
 
         job = q.enqueue('tests.fixtures.say_hello', name='阿达姆', description='你好 世界!')
         w.work(burst=True)
@@ -946,7 +947,7 @@ class TestWorker(RQTestCase):
         q = Queue()
         q.enqueue(create_file, SENTINEL_FILE)
 
-        w = Worker([q])
+        w = ForkWorker([q])
 
         suspend(self.testconn)
 
@@ -967,7 +968,7 @@ class TestWorker(RQTestCase):
         for _ in range(5):
             q.enqueue(do_nothing)
 
-        w = Worker([q])
+        w = ForkWorker([q])
 
         # This suspends workers for working for 2 second
         suspend(self.testconn, 2)
@@ -985,16 +986,16 @@ class TestWorker(RQTestCase):
     def test_worker_hash_(self):
         """Workers are hashed by their .name attribute"""
         q = Queue('foo')
-        w1 = Worker([q], name="worker1")
-        w2 = Worker([q], name="worker2")
-        w3 = Worker([q], name="worker1")
+        w1 = ForkWorker([q], name="worker1")
+        w2 = ForkWorker([q], name="worker2")
+        w3 = ForkWorker([q], name="worker1")
         worker_set = set([w1, w2, w3])
         self.assertEqual(len(worker_set), 2)
 
     def test_worker_sets_birth(self):
         """Ensure worker correctly sets worker birth date."""
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
 
         w.register_birth()
 
@@ -1005,7 +1006,7 @@ class TestWorker(RQTestCase):
     def test_worker_sets_death(self):
         """Ensure worker correctly sets worker death date."""
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
 
         w.register_death()
 
@@ -1025,7 +1026,7 @@ class TestWorker(RQTestCase):
         self.testconn.zadd(bar_registry.key, {'bar': 1})
         self.assertEqual(self.testconn.zcard(bar_registry.key), 1)
 
-        worker = Worker([foo_queue, bar_queue])
+        worker = ForkWorker([foo_queue, bar_queue])
         self.assertEqual(worker.last_cleaned_at, None)
         worker.clean_registries()
         self.assertNotEqual(worker.last_cleaned_at, None)
@@ -1041,7 +1042,7 @@ class TestWorker(RQTestCase):
     def test_should_run_maintenance_tasks(self):
         """Workers should run maintenance tasks on startup and every hour."""
         queue = Queue(connection=self.testconn)
-        worker = Worker(queue)
+        worker = ForkWorker(queue)
         self.assertTrue(worker.should_run_maintenance_tasks)
 
         worker.last_cleaned_at = utcnow()
@@ -1050,7 +1051,7 @@ class TestWorker(RQTestCase):
         self.assertTrue(worker.should_run_maintenance_tasks)
 
         # custom maintenance_interval
-        worker = Worker(queue, maintenance_interval=10)
+        worker = ForkWorker(queue, maintenance_interval=10)
         self.assertTrue(worker.should_run_maintenance_tasks)
         worker.last_cleaned_at = utcnow()
         self.assertFalse(worker.should_run_maintenance_tasks)
@@ -1063,7 +1064,7 @@ class TestWorker(RQTestCase):
         registry = StartedJobRegistry(connection=self.testconn)
         self.testconn.zadd(registry.key, {'foo': 1})
 
-        worker = Worker(queue, connection=self.testconn)
+        worker = ForkWorker(queue, connection=self.testconn)
         worker.work(burst=True)
         self.assertEqual(self.testconn.zcard(registry.key), 0)
 
@@ -1083,8 +1084,8 @@ class TestWorker(RQTestCase):
         Queue.enqueue_dependents = new_enqueue_dependents
 
         q = Queue()
-        w = Worker([q])
-        with mock.patch.object(Worker, 'execute_job', wraps=w.execute_job) as mocked:
+        w = ForkWorker([q])
+        with mock.patch.object(ForkWorker, 'execute_job', wraps=w.execute_job) as mocked:
             parent_job = q.enqueue(say_hello, result_ttl=0)
             Queue._add_enqueue = parent_job
             job = q.enqueue_call(say_hello, depends_on=parent_job)
@@ -1110,7 +1111,7 @@ class TestWorker(RQTestCase):
         # persists properly
         job = q.enqueue(modify_self, meta={'foo': 'bar', 'baz': 42}, args=[{'baz': 10, 'newinfo': 'waka'}])
 
-        w = Worker([q])
+        w = ForkWorker([q])
         w.work(burst=True)
 
         job_check = Job.fetch(job.id)
@@ -1127,7 +1128,7 @@ class TestWorker(RQTestCase):
         # persists properly
         job = q.enqueue(modify_self_and_error, meta={'foo': 'bar', 'baz': 42}, args=[{'baz': 10, 'newinfo': 'waka'}])
 
-        w = Worker([q])
+        w = ForkWorker([q])
         w.work(burst=True)
 
         # Postconditions
@@ -1146,7 +1147,7 @@ class TestWorker(RQTestCase):
         """Check that log_result_lifespan True causes job lifespan to be logged."""
         q = Queue()
 
-        w = Worker([q])
+        w = ForkWorker([q])
         job = q.enqueue(say_hello, args=('Frank',), result_ttl=10)
         w.perform_job(job, q)
         mock_logger_info.assert_called_with('Result is kept for %s seconds', 10)
@@ -1157,7 +1158,7 @@ class TestWorker(RQTestCase):
         """Check that log_result_lifespan False causes job lifespan to not be logged."""
         q = Queue()
 
-        class TestWorker(Worker):
+        class TestWorker(ForkWorker):
             log_result_lifespan = False
 
         w = TestWorker([q])
@@ -1169,7 +1170,7 @@ class TestWorker(RQTestCase):
     def test_log_job_description_true(self, mock_logger_info):
         """Check that log_job_description True causes job lifespan to be logged."""
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
         q.enqueue(say_hello, args=('Frank',), result_ttl=10)
         w.dequeue_job_and_maintain_ttl(10)
         self.assertIn("Frank", mock_logger_info.call_args[0][2])
@@ -1178,7 +1179,7 @@ class TestWorker(RQTestCase):
     def test_log_job_description_false(self, mock_logger_info):
         """Check that log_job_description False causes job lifespan to not be logged."""
         q = Queue()
-        w = Worker([q], log_job_description=False)
+        w = ForkWorker([q], log_job_description=False)
         q.enqueue(say_hello, args=('Frank',), result_ttl=10)
         w.dequeue_job_and_maintain_ttl(10)
         self.assertNotIn("Frank", mock_logger_info.call_args[0][2])
@@ -1186,37 +1187,37 @@ class TestWorker(RQTestCase):
     def test_worker_configures_socket_timeout(self):
         """Ensures that the worker correctly updates Redis client connection to have a socket_timeout"""
         q = Queue()
-        _ = Worker([q])
+        _ = ForkWorker([q])
         connection_kwargs = q.connection.connection_pool.connection_kwargs
         self.assertEqual(connection_kwargs["socket_timeout"], 415)
 
     def test_worker_version(self):
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
         w.version = '0.0.0'
         w.register_birth()
         self.assertEqual(w.version, '0.0.0')
         w.refresh()
         self.assertEqual(w.version, '0.0.0')
         # making sure that version is preserved when worker is retrieved by key
-        worker = Worker.find_by_key(w.key)
+        worker = ForkWorker.find_by_key(w.key)
         self.assertEqual(worker.version, '0.0.0')
 
     def test_python_version(self):
         python_version = sys.version
         q = Queue()
-        w = Worker([q])
+        w = ForkWorker([q])
         w.register_birth()
         self.assertEqual(w.python_version, python_version)
         # now patching version
         python_version = 'X.Y.Z.final'  # dummy version
         self.assertNotEqual(python_version, sys.version)  # otherwise tests are pointless
-        w2 = Worker([q])
+        w2 = ForkWorker([q])
         w2.python_version = python_version
         w2.register_birth()
         self.assertEqual(w2.python_version, python_version)
         # making sure that version is preserved when worker is retrieved by key
-        worker = Worker.find_by_key(w2.key)
+        worker = ForkWorker.find_by_key(w2.key)
         self.assertEqual(worker.python_version, python_version)
 
     def test_dequeue_random_strategy(self):
@@ -1226,7 +1227,7 @@ class TestWorker(RQTestCase):
             for j in range(3):
                 qs[i].enqueue(say_pid, job_id='q%d_%d' % (i, j))
 
-        w = Worker(qs)
+        w = ForkWorker(qs)
         w.work(burst=True, dequeue_strategy="random")
 
         start_times = []
@@ -1252,7 +1253,7 @@ class TestWorker(RQTestCase):
     def test_request_force_stop_ignores_consecutive_signals(self):
         """Ignore signals sent within 1 second of the last signal"""
         queue = Queue(connection=self.testconn)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         worker._horse_pid = 1
         worker._shutdown_requested_date = utcnow()
         with mock.patch.object(worker, 'kill_horse') as mocked:
@@ -1270,7 +1271,7 @@ class TestWorker(RQTestCase):
             for j in range(3):
                 qs[i].enqueue(say_pid, job_id='q%d_%d' % (i, j))
 
-        w = Worker(qs)
+        w = ForkWorker(qs)
         w.work(burst=True, dequeue_strategy="round_robin")
 
         start_times = []
@@ -1324,7 +1325,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
     @slow
     def test_idle_worker_warm_shutdown(self):
         """worker with no ongoing job receiving single SIGTERM signal and shutting down"""
-        w = Worker('foo')
+        w = ForkWorker('foo')
         self.assertFalse(w._stop_requested)
         p = Process(target=kill_worker, args=(os.getpid(), False))
         p.start()
@@ -1338,7 +1339,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
     def test_working_worker_warm_shutdown(self):
         """worker with an ongoing job receiving single SIGTERM signal, allowing job to finish then shutting down"""
         fooq = Queue('foo')
-        w = Worker(fooq)
+        w = ForkWorker(fooq)
 
         sentinel_file = '/tmp/.rq_sentinel_warm'
         fooq.enqueue(create_file_after_timeout, sentinel_file, 2)
@@ -1360,7 +1361,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
     def test_working_worker_cold_shutdown(self):
         """Busy worker shuts down immediately on double SIGTERM signal"""
         fooq = Queue('foo')
-        w = Worker(fooq)
+        w = ForkWorker(fooq)
 
         sentinel_file = '/tmp/.rq_sentinel_cold'
         self.assertFalse(
@@ -1388,7 +1389,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         """
         fooq = Queue('foo')
         self.assertEqual(fooq.count, 0)
-        w = Worker(fooq)
+        w = ForkWorker(fooq)
         sentinel_file = '/tmp/.rq_sentinel_work_horse_death'
         if os.path.exists(sentinel_file):
             os.remove(sentinel_file)
@@ -1413,7 +1414,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         """
         fooq = Queue('foo')
         self.assertEqual(fooq.count, 0)
-        w = Worker([fooq], job_monitoring_interval=1)
+        w = ForkWorker([fooq], job_monitoring_interval=1)
 
         sentinel_file = '/tmp/.rq_sentinel_work_horse_death'
         if os.path.exists(sentinel_file):
@@ -1571,7 +1572,7 @@ class HerokuWorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
 class TestExceptionHandlerMessageEncoding(RQTestCase):
     def setUp(self):
         super().setUp()
-        self.worker = Worker("foo")
+        self.worker = ForkWorker("foo")
         self.worker._exc_handlers = []
         # Mimic how exception info is actually passed forwards
         try:
@@ -1583,69 +1584,3 @@ class TestExceptionHandlerMessageEncoding(RQTestCase):
         """worker.handle_exception doesn't crash on non-ascii in exception message."""
         self.worker.handle_exception(Mock(), *self.exc_info)
 
-
-class TestRoundRobinWorker(RQTestCase):
-    def test_round_robin(self):
-        qs = [Queue('q%d' % i) for i in range(5)]
-
-        for i in range(5):
-            for j in range(3):
-                qs[i].enqueue(say_pid, job_id='q%d_%d' % (i, j))
-
-        w = RoundRobinWorker(qs)
-        w.work(burst=True)
-        start_times = []
-        for i in range(5):
-            for j in range(3):
-                job = Job.fetch('q%d_%d' % (i, j))
-                start_times.append(('q%d_%d' % (i, j), job.started_at))
-        sorted_by_time = sorted(start_times, key=lambda tup: tup[1])
-        sorted_ids = [tup[0] for tup in sorted_by_time]
-        expected = [
-            'q0_0',
-            'q1_0',
-            'q2_0',
-            'q3_0',
-            'q4_0',
-            'q0_1',
-            'q1_1',
-            'q2_1',
-            'q3_1',
-            'q4_1',
-            'q0_2',
-            'q1_2',
-            'q2_2',
-            'q3_2',
-            'q4_2',
-        ]
-        self.assertEqual(expected, sorted_ids)
-
-
-class TestRandomWorker(RQTestCase):
-    def test_random_worker(self):
-        qs = [Queue('q%d' % i) for i in range(5)]
-
-        for i in range(5):
-            for j in range(3):
-                qs[i].enqueue(say_pid, job_id='q%d_%d' % (i, j))
-
-        w = RandomWorker(qs)
-        w.work(burst=True)
-        start_times = []
-        for i in range(5):
-            for j in range(3):
-                job = Job.fetch('q%d_%d' % (i, j))
-                start_times.append(('q%d_%d' % (i, j), job.started_at))
-        sorted_by_time = sorted(start_times, key=lambda tup: tup[1])
-        sorted_ids = [tup[0] for tup in sorted_by_time]
-        expected_rr = ['q%d_%d' % (i, j) for j in range(3) for i in range(5)]
-        expected_ser = ['q%d_%d' % (i, j) for i in range(5) for j in range(3)]
-        self.assertNotEqual(sorted_ids, expected_rr)
-        self.assertNotEqual(sorted_ids, expected_ser)
-        expected_rr.reverse()
-        expected_ser.reverse()
-        self.assertNotEqual(sorted_ids, expected_rr)
-        self.assertNotEqual(sorted_ids, expected_ser)
-        sorted_ids.sort()
-        expected_ser.sort()
-        self.assertEqual(sorted_ids, expected_ser)

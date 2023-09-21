@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from rq.job import Job, JobStatus, Retry
 from rq.queue import Queue
 from rq.registry import FailedJobRegistry, StartedJobRegistry
-from rq.worker import Worker
+from rq.worker import ForkWorker
 from tests import RQTestCase, fixtures
 from tests.fixtures import div_by_zero, say_hello
 
@@ -99,7 +99,7 @@ class TestRetry(RQTestCase):
         retry = Retry(max=1, interval=5)
         job = queue.enqueue(div_by_zero, retry=retry)
 
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         registry = queue.scheduled_job_registry
         # If job if configured to retry with interval, it will be scheduled,
         # not directly put back in the queue

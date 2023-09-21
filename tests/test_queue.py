@@ -17,7 +17,7 @@ from rq.registry import (
 )
 from rq.serializers import JSONSerializer
 from rq.utils import get_version
-from rq.worker import Worker
+from rq.worker import ForkWorker
 from tests import RQTestCase
 from tests.fixtures import echo, say_hello
 
@@ -290,9 +290,9 @@ class TestQueue(RQTestCase):
 
         # If job execution fails after it's dequeued, job should be in the intermediate queue
         # # and it's status is still QUEUED
-        with patch.object(Worker, 'execute_job'):
+        with patch.object(ForkWorker, 'execute_job'):
             # mocked.execute_job.side_effect = Exception()
-            worker = Worker(queue, connection=self.testconn)
+            worker = ForkWorker(queue, connection=self.testconn)
             worker.work(burst=True)
 
             # Job status is still QUEUED even though it's already dequeued
@@ -438,7 +438,7 @@ class TestQueue(RQTestCase):
         self.assertTrue('third-queue' in names)
 
         # Now empty two queues
-        w = Worker([q2, q3])
+        w = ForkWorker([q2, q3])
         w.work(burst=True)
 
         # Queue.all() should still report the empty queues

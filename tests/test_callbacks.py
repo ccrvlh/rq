@@ -1,9 +1,9 @@
 from datetime import timedelta
 
-from rq import Queue, Worker
+from rq import Queue, ForkWorker
 from rq.job import UNEVALUATED, Callback, Job, JobStatus
 from rq.serializers import JSONSerializer
-from rq.worker import SimpleWorker
+from rq.worker import Worker
 from tests import RQTestCase
 from tests.fixtures import (
     div_by_zero,
@@ -164,7 +164,7 @@ class SyncJobCallback(RQTestCase):
         """queue.enqueue* methods with on_stopped is persisted correctly"""
         connection = self.testconn
         queue = Queue('foo', connection=connection, serializer=JSONSerializer)
-        worker = SimpleWorker('foo', connection=connection, serializer=JSONSerializer)
+        worker = Worker('foo', connection=connection, serializer=JSONSerializer)
 
         job = queue.enqueue(long_process, on_stopped=save_result_if_not_stopped)
         job.execute_stopped_callback(
@@ -184,7 +184,7 @@ class WorkerCallbackTestCase(RQTestCase):
     def test_success_callback(self):
         """Test success callback is executed only when job is successful"""
         queue = Queue(connection=self.testconn)
-        worker = SimpleWorker([queue])
+        worker = Worker([queue])
 
         # Callback is executed when job is successfully executed
         job = queue.enqueue(say_hello, on_success=save_result)
@@ -211,7 +211,7 @@ class WorkerCallbackTestCase(RQTestCase):
     def test_erroneous_success_callback(self):
         """Test exception handling when executing success callback"""
         queue = Queue(connection=self.testconn)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
 
         # If success_callback raises an error, job will is considered as failed
         job = queue.enqueue(say_hello, on_success=erroneous_callback)
@@ -226,7 +226,7 @@ class WorkerCallbackTestCase(RQTestCase):
     def test_failure_callback(self):
         """Test failure callback is executed only when job a fails"""
         queue = Queue(connection=self.testconn)
-        worker = SimpleWorker([queue])
+        worker = Worker([queue])
 
         # Callback is executed when job is successfully executed
         job = queue.enqueue(div_by_zero, on_failure=save_exception)

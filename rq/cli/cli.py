@@ -45,7 +45,7 @@ from rq.suspension import is_suspended
 from rq.suspension import resume as connection_resume
 from rq.suspension import suspend as connection_suspend
 from rq.utils import get_call_string, import_attribute
-from rq.worker import Worker
+from rq.worker import ForkWorker
 from rq.worker_pool import WorkerPool
 from rq.worker_registration import clean_worker_registry
 
@@ -239,13 +239,6 @@ def worker(
     if pid:
         with open(os.path.expanduser(pid), "w") as fp:
             fp.write(str(os.getpid()))
-
-    worker_name = cli_config.worker_class.__qualname__
-    if worker_name in ["RoundRobinWorker", "RandomWorker"]:
-        strategy_alternative = "random" if worker_name == "RandomWorker" else "round_robin"
-        msg = f"WARNING: {worker_name} is deprecated. Use `--dequeue-strategy {strategy_alternative}` instead."
-        warnings.warn(msg, DeprecationWarning)
-        click.secho(msg, fg='yellow')
 
     if dequeue_strategy not in ("default", "random", "round_robin"):
         click.secho(
@@ -492,7 +485,7 @@ def worker_pool(
     if worker_class:
         worker_class = import_attribute(worker_class)
     else:
-        worker_class = Worker
+        worker_class = ForkWorker
 
     if job_class:
         job_class = import_attribute(job_class)

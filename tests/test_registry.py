@@ -16,7 +16,7 @@ from rq.registry import (
 )
 from rq.serializers import JSONSerializer
 from rq.utils import as_text, current_timestamp
-from rq.worker import Worker
+from rq.worker import ForkWorker
 from tests import RQTestCase
 from tests.fixtures import div_by_zero, say_hello
 
@@ -176,7 +176,7 @@ class TestRegistry(RQTestCase):
         """Job is removed from StartedJobRegistry after execution."""
         registry = StartedJobRegistry(connection=self.testconn)
         queue = Queue(connection=self.testconn)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
 
         job = queue.enqueue(say_hello)
         self.assertTrue(job.is_queued)
@@ -202,7 +202,7 @@ class TestRegistry(RQTestCase):
         """Ensure job is removed from StartedJobRegistry when deleted."""
         registry = StartedJobRegistry(connection=self.testconn)
         queue = Queue(connection=self.testconn)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
 
         job = queue.enqueue(say_hello)
         self.assertTrue(job.is_queued)
@@ -299,7 +299,7 @@ class TestFinishedJobRegistry(RQTestCase):
         """Completed jobs are added to FinishedJobRegistry."""
         self.assertEqual(self.registry.get_job_ids(), [])
         queue = Queue(connection=self.testconn)
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
 
         # Completed jobs are put in FinishedJobRegistry
         job = queue.enqueue(say_hello)
@@ -382,7 +382,7 @@ class TestFailedJobRegistry(RQTestCase):
         queue = Queue(connection=self.testconn)
         job = queue.enqueue(div_by_zero, failure_ttl=5)
 
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
         worker.work(burst=True)
 
         registry = FailedJobRegistry(connection=worker.connection)
@@ -435,7 +435,7 @@ class TestFailedJobRegistry(RQTestCase):
         queue = Queue(connection=self.testconn, serializer=JSONSerializer)
         job = queue.enqueue(div_by_zero, failure_ttl=5)
 
-        worker = Worker([queue], serializer=JSONSerializer)
+        worker = ForkWorker([queue], serializer=JSONSerializer)
         worker.work(burst=True)
 
         registry = FailedJobRegistry(connection=worker.connection, serializer=JSONSerializer)
@@ -496,7 +496,7 @@ class TestFailedJobRegistry(RQTestCase):
         """Failed jobs are added to FailedJobRegistry"""
         q = Queue(connection=self.testconn)
 
-        w = Worker([q])
+        w = ForkWorker([q])
         registry = FailedJobRegistry(connection=w.connection)
 
         timestamp = current_timestamp()

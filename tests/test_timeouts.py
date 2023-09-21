@@ -1,12 +1,12 @@
 import time
 
-from rq import Queue, SimpleWorker
+from rq import Queue, Worker
 from rq.registry import FailedJobRegistry, FinishedJobRegistry
 from rq.timeouts import TimerDeathPenalty
 from tests import RQTestCase
 
 
-class TimerBasedWorker(SimpleWorker):
+class TimerBasedWorker(Worker):
     death_penalty_class = TimerDeathPenalty
 
 

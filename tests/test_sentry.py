@@ -6,7 +6,7 @@ from rq import Queue
 from rq.cli import main
 from rq.cli.helpers import read_config_file
 from rq.contrib.sentry import register_sentry
-from rq.worker import SimpleWorker
+from rq.worker import Worker
 from tests import RQTestCase
 from tests.fixtures import div_by_zero
 
@@ -48,7 +48,7 @@ class TestSentry(RQTestCase):
         self.assertIsNone(hub.last_event_id())
         queue = Queue(connection=self.testconn)
         queue.enqueue(div_by_zero)
-        worker = SimpleWorker(queues=[queue], connection=self.testconn)
+        worker = Worker(queues=[queue], connection=self.testconn)
         register_sentry('https://123@sentry.io/123')
         worker.work(burst=True)
         self.assertIsNotNone(hub.last_event_id())

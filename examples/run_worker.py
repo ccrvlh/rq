@@ -1,7 +1,7 @@
-from rq import Connection, Queue, Worker
+from rq import Connection, Queue, ForkWorker
 
 if __name__ == '__main__':
     # Tell rq what Redis connection to use
     with Connection():
         q = Queue()
-        Worker(q).work()
+        ForkWorker(q).work()

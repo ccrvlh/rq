@@ -7,7 +7,7 @@ from rq.job import JobStatus
 from rq.maintenance import clean_intermediate_queue
 from rq.queue import Queue
 from rq.utils import get_version
-from rq.worker import Worker
+from rq.worker import ForkWorker
 from tests import RQTestCase
 from tests.fixtures import say_hello
 
@@ -21,9 +21,9 @@ class MaintenanceTestCase(RQTestCase):
 
         # If job execution fails after it's dequeued, job should be in the intermediate queue
         # # and it's status is still QUEUED
-        with patch.object(Worker, 'execute_job'):
+        with patch.object(ForkWorker, 'execute_job'):
             # mocked.execute_job.side_effect = Exception()
-            worker = Worker(queue, connection=self.testconn)
+            worker = ForkWorker(queue, connection=self.testconn)
             worker.work(burst=True)
 
             self.assertEqual(job.get_status(), JobStatus.QUEUED)

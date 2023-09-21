@@ -281,7 +281,7 @@ class BaseWorker:
         queue_class: Optional[Type['Queue']] = None,
         queue: Optional['Queue'] = None,
         serializer=None,
-    ) -> List['Worker']:
+    ) -> List['ForkWorker']:
         """Returns an iterable of all Workers.
 
         Returns:
@@ -743,7 +743,134 @@ class BaseWorker:
         warnings.warn("worker.state is deprecated, use worker.get_state() instead.", DeprecationWarning)
         return self.get_state()
 
+
+    def perform_job(self, job: 'Job', queue: 'Queue') -> bool:
+        """Performs the actual work of a job.  Will/should only be called
+        inside the work horse's process.
+
+        Args:
+            job (Job): The Job
+            queue (Queue): The Queue
+
+        Returns:
+            bool: True after finished.
+        """
+        push_connection(self.connection)
+        started_job_registry = queue.started_job_registry
+        self.log.debug('Started Job Registry set.')
+
+        try:
+            remove_from_intermediate_queue = len(self.queues) == 1
+            self.prepare_job_execution(job, remove_from_intermediate_queue)
+
+            job.started_at = utcnow()
+            timeout = job.timeout or self.queue_class.DEFAULT_TIMEOUT
+            with self.death_penalty_class(timeout, JobTimeoutException, job_id=job.id):
+                self.log.debug('Performing Job...')
+                rv = job.perform()
+                self.log.debug('Finished performing Job ID %s', job.id)
+
+            job.ended_at = utcnow()
+
+            # Pickle the result in the same try-except block since we need
+            # to use the same exc handling when pickling fails
+            job._result = rv
+
+            job.heartbeat(utcnow(), job.success_callback_timeout)
+            job.execute_success_callback(self.death_penalty_class, rv)
+
+            self.handle_job_success(job=job, queue=queue, started_job_registry=started_job_registry)
+        except:  # NOQA
+            self.log.debug('Job %s raised an exception.', job.id)
+            job.ended_at = utcnow()
+            exc_info = sys.exc_info()
+            exc_string = ''.join(traceback.format_exception(*exc_info))
+
+            try:
+                job.heartbeat(utcnow(), job.failure_callback_timeout)
+                job.execute_failure_callback(self.death_penalty_class, *exc_info)
+            except:  # noqa
+                exc_info = sys.exc_info()
+                exc_string = ''.join(traceback.format_exception(*exc_info))
+
+            self.handle_job_failure(
+                job=job, exc_string=exc_string, queue=queue, started_job_registry=started_job_registry
+            )
+            self.handle_exception(job, *exc_info)
+            return False
+
+        finally:
+            pop_connection()
+
+        self.log.info('%s: %s (%s)', green(job.origin), blue('Job OK'), job.id)
+        if rv is not None:
+            self.log.debug('Result: %r', yellow(as_text(str(rv))))
+
+        if self.log_result_lifespan:
+            result_ttl = job.get_result_ttl(self.default_result_ttl)
+            if result_ttl == 0:
+                self.log.info('Result discarded immediately')
+            elif result_ttl > 0:
+                self.log.info('Result is kept for %s seconds', result_ttl)
+            else:
+                self.log.info('Result will never expire, clean up result key manually')
+
+        return True
+
+
     state = property(_get_state, _set_state)
+
+    def handle_job_success(self, job: 'Job', queue: 'Queue', started_job_registry: StartedJobRegistry):
+        """Handles the successful execution of certain job.
+        It will remove the job from the `StartedJobRegistry`, adding it to the `SuccessfulJobRegistry`,
+        and run a few maintenance tasks including:
+            - Resting the current job ID
+            - Enqueue dependents
+            - Incrementing the job count and working time
+            - Handling of the job successful execution
+
+        Runs within a loop with the `watch` method so that protects interactions
+        with dependents keys.
+
+        Args:
+            job (Job): The job that was successful.
+            queue (Queue): The queue
+            started_job_registry (StartedJobRegistry): The started registry
+        """
+        self.log.debug('Handling successful execution of job %s', job.id)
+
+        with self.connection.pipeline() as pipeline:
+            while True:
+                try:
+                    # if dependencies are inserted after enqueue_dependents
+                    # a WatchError is thrown by execute()
+                    pipeline.watch(job.dependents_key)
+                    # enqueue_dependents might call multi() on the pipeline
+                    queue.enqueue_dependents(job, pipeline=pipeline)
+
+                    if not pipeline.explicit_transaction:
+                        # enqueue_dependents didn't call multi after all!
+                        # We have to do it ourselves to make sure everything runs in a transaction
+                        pipeline.multi()
+
+                    self.set_current_job_id(None, pipeline=pipeline)
+                    self.increment_successful_job_count(pipeline=pipeline)
+                    self.increment_total_working_time(job.ended_at - job.started_at, pipeline)  # type: ignore
+
+                    result_ttl = job.get_result_ttl(self.default_result_ttl)
+                    if result_ttl != 0:
+                        self.log.debug('Saving job %s\'s successful execution result', job.id)
+                        job._handle_success(result_ttl, pipeline=pipeline)
+
+                    job.cleanup(result_ttl, pipeline=pipeline, remove_from_queue=False)
+                    self.log.debug('Removing job %s from StartedJobRegistry', job.id)
+                    started_job_registry.remove(job, pipeline=pipeline)
+
+                    pipeline.execute()
+                    self.log.debug('Finished handling successful execution of job %s', job.id)
+                    break
+                except redis.exceptions.WatchError:
+                    continue
 
     def _start_scheduler(
         self,
@@ -1107,7 +1234,31 @@ class BaseWorker:
         """Pushes an exception handler onto the exc handler stack."""
         self._exc_handlers.append(handler_func)
 
+
 class Worker(BaseWorker):
+    def execute_job(self, job: 'Job', queue: 'Queue'):
+        """Execute job in same thread/process, do not fork()"""
+        self.set_state(WorkerStatus.BUSY)
+        self.perform_job(job, queue)
+        self.set_state(WorkerStatus.IDLE)
+
+    def get_heartbeat_ttl(self, job: 'Job') -> int:
+        """-1" means that jobs never timeout. In this case, we should _not_ do -1 + 60 = 59.
+        We should just stick to DEFAULT_WORKER_TTL.
+
+        Args:
+            job (Job): The Job
+
+        Returns:
+            ttl (int): TTL
+        """
+        if job.timeout == -1:
+            return DEFAULT_WORKER_TTL
+        else:
+            return int((job.timeout or DEFAULT_WORKER_TTL)) + 60
+
+
+class ForkWorker(BaseWorker):
     @property
     def horse_pid(self):
         """The horse's process ID.  Only available in the worker.  Will return
@@ -1396,131 +1547,6 @@ class Worker(BaseWorker):
         msg = 'Processing {0} from {1} since {2}'
         self.procline(msg.format(job.func_name, job.origin, time.time()))
 
-    def handle_job_success(self, job: 'Job', queue: 'Queue', started_job_registry: StartedJobRegistry):
-        """Handles the successful execution of certain job.
-        It will remove the job from the `StartedJobRegistry`, adding it to the `SuccessfulJobRegistry`,
-        and run a few maintenance tasks including:
-            - Resting the current job ID
-            - Enqueue dependents
-            - Incrementing the job count and working time
-            - Handling of the job successful execution
-
-        Runs within a loop with the `watch` method so that protects interactions
-        with dependents keys.
-
-        Args:
-            job (Job): The job that was successful.
-            queue (Queue): The queue
-            started_job_registry (StartedJobRegistry): The started registry
-        """
-        self.log.debug('Handling successful execution of job %s', job.id)
-
-        with self.connection.pipeline() as pipeline:
-            while True:
-                try:
-                    # if dependencies are inserted after enqueue_dependents
-                    # a WatchError is thrown by execute()
-                    pipeline.watch(job.dependents_key)
-                    # enqueue_dependents might call multi() on the pipeline
-                    queue.enqueue_dependents(job, pipeline=pipeline)
-
-                    if not pipeline.explicit_transaction:
-                        # enqueue_dependents didn't call multi after all!
-                        # We have to do it ourselves to make sure everything runs in a transaction
-                        pipeline.multi()
-
-                    self.set_current_job_id(None, pipeline=pipeline)
-                    self.increment_successful_job_count(pipeline=pipeline)
-                    self.increment_total_working_time(job.ended_at - job.started_at, pipeline)  # type: ignore
-
-                    result_ttl = job.get_result_ttl(self.default_result_ttl)
-                    if result_ttl != 0:
-                        self.log.debug('Saving job %s\'s successful execution result', job.id)
-                        job._handle_success(result_ttl, pipeline=pipeline)
-
-                    job.cleanup(result_ttl, pipeline=pipeline, remove_from_queue=False)
-                    self.log.debug('Removing job %s from StartedJobRegistry', job.id)
-                    started_job_registry.remove(job, pipeline=pipeline)
-
-                    pipeline.execute()
-                    self.log.debug('Finished handling successful execution of job %s', job.id)
-                    break
-                except redis.exceptions.WatchError:
-                    continue
-
-    def perform_job(self, job: 'Job', queue: 'Queue') -> bool:
-        """Performs the actual work of a job.  Will/should only be called
-        inside the work horse's process.
-
-        Args:
-            job (Job): The Job
-            queue (Queue): The Queue
-
-        Returns:
-            bool: True after finished.
-        """
-        push_connection(self.connection)
-        started_job_registry = queue.started_job_registry
-        self.log.debug('Started Job Registry set.')
-
-        try:
-            remove_from_intermediate_queue = len(self.queues) == 1
-            self.prepare_job_execution(job, remove_from_intermediate_queue)
-
-            job.started_at = utcnow()
-            timeout = job.timeout or self.queue_class.DEFAULT_TIMEOUT
-            with self.death_penalty_class(timeout, JobTimeoutException, job_id=job.id):
-                self.log.debug('Performing Job...')
-                rv = job.perform()
-                self.log.debug('Finished performing Job ID %s', job.id)
-
-            job.ended_at = utcnow()
-
-            # Pickle the result in the same try-except block since we need
-            # to use the same exc handling when pickling fails
-            job._result = rv
-
-            job.heartbeat(utcnow(), job.success_callback_timeout)
-            job.execute_success_callback(self.death_penalty_class, rv)
-
-            self.handle_job_success(job=job, queue=queue, started_job_registry=started_job_registry)
-        except:  # NOQA
-            self.log.debug('Job %s raised an exception.', job.id)
-            job.ended_at = utcnow()
-            exc_info = sys.exc_info()
-            exc_string = ''.join(traceback.format_exception(*exc_info))
-
-            try:
-                job.heartbeat(utcnow(), job.failure_callback_timeout)
-                job.execute_failure_callback(self.death_penalty_class, *exc_info)
-            except:  # noqa
-                exc_info = sys.exc_info()
-                exc_string = ''.join(traceback.format_exception(*exc_info))
-
-            self.handle_job_failure(
-                job=job, exc_string=exc_string, queue=queue, started_job_registry=started_job_registry
-            )
-            self.handle_exception(job, *exc_info)
-            return False
-
-        finally:
-            pop_connection()
-
-        self.log.info('%s: %s (%s)', green(job.origin), blue('Job OK'), job.id)
-        if rv is not None:
-            self.log.debug('Result: %r', yellow(as_text(str(rv))))
-
-        if self.log_result_lifespan:
-            result_ttl = job.get_result_ttl(self.default_result_ttl)
-            if result_ttl == 0:
-                self.log.info('Result discarded immediately')
-            elif result_ttl > 0:
-                self.log.info('Result is kept for %s seconds', result_ttl)
-            else:
-                self.log.info('Result will never expire, clean up result key manually')
-
-        return True
-
     def pop_exc_handler(self):
         """Pops the latest exception handler off of the exc handler stack."""
         return self._exc_handlers.pop()
@@ -1547,87 +1573,3 @@ class Worker(BaseWorker):
         payload = parse_payload(message)
         handle_command(self, payload)
 
-
-class SimpleWorker(Worker):
-    def execute_job(self, job: 'Job', queue: 'Queue'):
-        """Execute job in same thread/process, do not fork()"""
-        self.set_state(WorkerStatus.BUSY)
-        self.perform_job(job, queue)
-        self.set_state(WorkerStatus.IDLE)
-
-    def get_heartbeat_ttl(self, job: 'Job') -> int:
-        """-1" means that jobs never timeout. In this case, we should _not_ do -1 + 60 = 59.
-        We should just stick to DEFAULT_WORKER_TTL.
-
-        Args:
-            job (Job): The Job
-
-        Returns:
-            ttl (int): TTL
-        """
-        if job.timeout == -1:
-            return DEFAULT_WORKER_TTL
-        else:
-            return int((job.timeout or DEFAULT_WORKER_TTL)) + 60
-
-
-class HerokuWorker(Worker):
-    """
-    Modified version of rq worker which:
-    * stops work horses getting killed with SIGTERM
-    * sends SIGRTMIN to work horses on SIGTERM to the main process which in turn
-    causes the horse to crash `imminent_shutdown_delay` seconds later
-    """
-
-    imminent_shutdown_delay = 6
-    frame_properties = ['f_code', 'f_lasti', 'f_lineno', 'f_locals', 'f_trace']
-
-    def setup_work_horse_signals(self):
-        """Modified to ignore SIGINT and SIGTERM and only handle SIGRTMIN"""
-        signal.signal(signal.SIGRTMIN, self.request_stop_sigrtmin)
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-        signal.signal(signal.SIGTERM, signal.SIG_IGN)
-
-    def handle_warm_shutdown_request(self):
-        """If horse is alive send it SIGRTMIN"""
-        if self.horse_pid != 0:
-            self.log.info('Worker %s: warm shut down requested, sending horse SIGRTMIN signal', self.key)
-            self.kill_horse(sig=signal.SIGRTMIN)
-        else:
-            self.log.warning('Warm shut down requested, no horse found')
-
-    def request_stop_sigrtmin(self, signum, frame):
-        if self.imminent_shutdown_delay == 0:
-            self.log.warning('Imminent shutdown, raising ShutDownImminentException immediately')
-            self.request_force_stop_sigrtmin(signum, frame)
-        else:
-            self.log.warning(
-                'Imminent shutdown, raising ShutDownImminentException in %d seconds', self.imminent_shutdown_delay
-            )
-            signal.signal(signal.SIGRTMIN, self.request_force_stop_sigrtmin)
-            signal.signal(signal.SIGALRM, self.request_force_stop_sigrtmin)
-            signal.alarm(self.imminent_shutdown_delay)
-
-    def request_force_stop_sigrtmin(self, signum, frame):
-        info = dict((attr, getattr(frame, attr)) for attr in self.frame_properties)
-        self.log.warning('raising ShutDownImminentException to cancel job...')
-        raise ShutDownImminentException('shut down imminent (signal: %s)' % signal_name(signum), info)
-
-
-class RoundRobinWorker(Worker):
-    """
-    Modified version of Worker that dequeues jobs from the queues using a round-robin strategy.
-    """
-
-    def reorder_queues(self, reference_queue):
-        pos = self._ordered_queues.index(reference_queue)
-        self._ordered_queues = self._ordered_queues[pos + 1 :] + self._ordered_queues[: pos + 1]
-
-
-class RandomWorker(Worker):
-    """
-    Modified version of Worker that dequeues jobs from the queues using a random strategy.
-    """
-
-    def reorder_queues(self, reference_queue):
-        shuffle(self._ordered_queues)

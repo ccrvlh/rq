@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from rq import Queue, Worker
+from rq import Queue, ForkWorker
 from rq.utils import ceildiv
 from rq.worker_registration import (
     REDIS_WORKER_KEYS,
@@ -18,17 +18,17 @@ class TestWorkerRegistry(RQTestCase):
         """Ensure worker.key is correctly set in Redis."""
         foo_queue = Queue(name='foo')
         bar_queue = Queue(name='bar')
-        worker = Worker([foo_queue, bar_queue])
+        worker = ForkWorker([foo_queue, bar_queue])
 
         register(worker)
         redis = worker.connection
 
         self.assertTrue(redis.sismember(worker.redis_workers_keys, worker.key))
-        self.assertEqual(Worker.count(connection=redis), 1)
+        self.assertEqual(ForkWorker.count(connection=redis), 1)
         self.assertTrue(redis.sismember(WORKERS_BY_QUEUE_KEY % foo_queue.name, worker.key))
-        self.assertEqual(Worker.count(queue=foo_queue), 1)
+        self.assertEqual(ForkWorker.count(queue=foo_queue), 1)
         self.assertTrue(redis.sismember(WORKERS_BY_QUEUE_KEY % bar_queue.name, worker.key))
-        self.assertEqual(Worker.count(queue=bar_queue), 1)
+        self.assertEqual(ForkWorker.count(queue=bar_queue), 1)
 
         unregister(worker)
         self.assertFalse(redis.sismember(worker.redis_workers_keys, worker.key))
@@ -41,9 +41,9 @@ class TestWorkerRegistry(RQTestCase):
         bar_queue = Queue(name='bar')
         baz_queue = Queue(name='baz')
 
-        worker1 = Worker([foo_queue, bar_queue])
-        worker2 = Worker([foo_queue])
-        worker3 = Worker([baz_queue])
+        worker1 = ForkWorker([foo_queue, bar_queue])
+        worker2 = ForkWorker([foo_queue])
+        worker3 = ForkWorker([baz_queue])
 
         self.assertEqual(set(), get_keys(foo_queue))
 
@@ -68,7 +68,7 @@ class TestWorkerRegistry(RQTestCase):
     def test_clean_registry(self):
         """clean_registry removes worker keys that don't exist in Redis"""
         queue = Queue(name='foo')
-        worker = Worker([queue])
+        worker = ForkWorker([queue])
 
         register(worker)
         redis = worker.connection
@@ -92,7 +92,7 @@ class TestWorkerRegistry(RQTestCase):
 
         queue = Queue(name='foo')
         for i in range(MAX_WORKERS):
-            worker = Worker([queue])
+            worker = ForkWorker([queue])
             register(worker)
 
         with patch('rq.worker_registration.MAX_KEYS', MAX_KEYS), patch.object(
