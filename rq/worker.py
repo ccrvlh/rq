@@ -1715,6 +1715,26 @@ class ThreadPoolWorker(BaseWorker):
         self._lock = threading.Lock()
         self._current_jobs: List[Tuple['Job', 'Future']] = []  # type: ignore
         super(ThreadPoolWorker, self).__init__(*args, **kwargs)
+    
+    @property
+    def total_horse_count(self) -> int:
+        """Returns the number of availble horses.
+        In the `SimpleWorker` and `Worker` this will always be 1.
+
+        Returns:
+            horse_count (int): The number of horses
+        """
+        return self.threadpool_size
+
+    @property
+    def idle_horses_count(self):
+        """Checks whether the thread pool is full.
+        Returns True if there are no idle threads, False otherwise
+
+        Returns:
+            is_full (bool): True if full, False otherwise.
+        """
+        return self.threadpool_size - self._idle_threads
 
     @property
     def is_pool_full(self):
