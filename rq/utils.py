@@ -12,13 +12,15 @@ import importlib
 import logging
 import numbers
 import sys
+import signal
 
 from collections.abc import Iterable
-from signal import signal
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
 from redis.exceptions import ResponseError
 
 from rq.exceptions import TimeoutFormatError
+from rq.defaults import TIMESTAMP_FORMAT
+
 
 if TYPE_CHECKING:
     from redis import Redis
@@ -37,6 +39,7 @@ yet been evaluated.
 _signames = dict(
     (getattr(signal, signame), signame) for signame in dir(signal) if signame.startswith('SIG') and '_' not in signame
 )
+
 
 def compact(lst: List[Any]) -> List[Any]:
     """Excludes `None` values from a list-like object.
@@ -145,16 +148,29 @@ def now():
     return datetime.datetime.now(datetime.timezone.utc)
 
 
-_TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%S.%fZ'
-
-
 def utcformat(dt: dt.datetime) -> str:
-    return dt.strftime(as_text(_TIMESTAMP_FORMAT))
+    """Parses a datetime object to a string in UTC format
+
+    Args:
+        dt (dt.datetime): The datetime object
+
+    Returns:
+        str: The datetime as a string
+    """    
+    return dt.strftime(as_text(TIMESTAMP_FORMAT))
 
 
 def utcparse(string: str) -> dt.datetime:
+    """Parses a string in UTC format to a datetime object
+
+    Args:
+        string (str): The datetime as a string
+
+    Returns:
+        dt.datetime: The datetime object
+    """    
     try:
-        return datetime.datetime.strptime(string, _TIMESTAMP_FORMAT)
+        return datetime.datetime.strptime(string, TIMESTAMP_FORMAT)
     except ValueError:
         # This catches any jobs remain with old datetime format
         return datetime.datetime.strptime(string, '%Y-%m-%dT%H:%M:%SZ')
@@ -346,8 +362,6 @@ def parse_names(queues_or_names: List[Union[str, 'Queue']]) -> List[str]:
         else:
             names.append(str(queue_or_name))
     return names
-
-
 
 
 def signal_name(signum):
