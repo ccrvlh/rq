@@ -1,14 +1,17 @@
 import json
 
 from logging import getLogger
-from typing import List, Optional, Type, TypeVar
+from typing import Any, List, Optional, Type, TypeVar, Union
 from redis import Redis
 
 from rq import registry
 from rq import utils
+from rq.connections import resolve_connection
 from rq.job import Job
 from rq.job import JobStatus
 from rq.queue import Queue
+from rq.timeouts import DeathPenaltyInterface
+from rq.timeouts import UnixSignalDeathPenalty
 from rq.types import FunctionReferenceType
 from rq.worker import Worker
 
@@ -21,8 +24,8 @@ WorkerReference = TypeVar('WorkerReference', str, Worker)
 class RQ:
     def __init__(
         self,
-        queue: Optional[str] = None,
         connection: Optional[Redis] = None,
+        queue: Optional[str] = None,
         queues: Optional[List[str]] = None,
         namespace: Optional[str] = None,
         redis_url: Optional[str] = None,
@@ -77,6 +80,10 @@ class RQ:
     @property
     def workers_namespace(self) -> str:
         return "rq:worker:"
+
+    @property
+    def queue_keys(self) -> str:
+        return "rq:queues"
 
     @property
     def pubsub_channel(self) -> str:
@@ -169,8 +176,27 @@ class RQ:
 
     # Queues
 
-    def create_queue(self):
-        pass
+    def create_queue(
+        self,
+        name: str = 'default',
+        default_timeout: Optional[int] = None,
+        connection: Optional['Redis'] = None,
+        is_async: bool = True,
+        job_class: Optional[Union[str, Type['Job']]] = None,
+        serializer: Any = None,
+        death_penalty_class: Optional[DeathPenaltyInterface] = UnixSignalDeathPenalty,
+        **kwargs
+    ) -> Queue:
+        return Queue(
+            connection=connection or self.conn,
+            name=name,
+            default_timeout=default_timeout,
+            is_async=is_async,
+            job_class=job_class,
+            serializer=serializer,
+            death_penalty_class=death_penalty_class,
+            **kwargs
+        )
 
     def get_queue(self, name: str) -> Optional[Queue]:
         """Gets a key from it's name.
@@ -186,7 +212,7 @@ class RQ:
         queue = Queue.from_queue_key(queue_key, connection=self.conn)
         return queue
 
-    def get_all_queues(self, job_class: Optional[Type['Job']] = None, serializer=None) -> List['Queue']:
+    def get_queues(self, job_class: Optional[Type['Job']] = None, serializer=None) -> List['Queue']:
         """Returns an iterable of all Queues.
 
         Args:
@@ -196,47 +222,14 @@ class RQ:
         Returns:
             queues (List[Queue]): A list of all queues.
         """
-
         def to_queue(queue_key):
             return Queue.from_queue_key(
                 utils.as_text(queue_key), connection=self.conn, job_class=job_class, serializer=serializer
             )
 
-        all_registerd_queues = self.conn.smembers(self.queue_namespace)
+        all_registerd_queues = self.conn.smembers(self.queue_keys)
         all_queues = [to_queue(rq_key) for rq_key in all_registerd_queues if rq_key]
         return all_queues
-
-    def get_queue_size(self, queue: QueueReference) -> int:
-        """Returns the count of all jobs in the queue.
-
-        Args:
-            queue (QueueReference): The Queue, can be referenced by name or the Queue object itself.
-
-        Returns:
-            int: The queue count
-        """
-        _queue = self._get_queue_from_reference(queue)
-        if _queue.connection is None:
-            _queue.connection = self.conn
-        return _queue.count
-
-    def empty_queue(self, queue: QueueReference) -> bool:
-        """Empties a specific queue.
-
-        Args:
-            queue (QueueReference): The queue reference
-
-        Returns:
-            bool: Whether the operation was successful.
-        """
-        _queue = self._get_queue_from_reference(queue)
-        if _queue.connection is None:
-            _queue.connection = self.conn
-        try:
-            _queue.empty()
-        except Exception as e:
-            return False
-        return True
 
     # Workers
 
