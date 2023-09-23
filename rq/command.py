@@ -45,7 +45,12 @@ def parse_payload(payload: Dict[Any, Any]) -> Dict[Any, Any]:
     Args:
         payload (dict): Parses the payload dict.
     """
-    return json.loads(payload.get('data').decode())
+    bytes_data = payload.get('data')
+    if not isinstance(bytes_data, bytes):
+        raise ValueError('Can only parse bytes data')
+
+    string_data = bytes_data.decode()
+    return json.loads(string_data)
 
 
 def send_shutdown_command(connection: 'Redis', worker_name: str):

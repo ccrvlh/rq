@@ -249,11 +249,12 @@ class Queue:
         """
         try:
             job = self.job_class.fetch(job_id, connection=self.connection, serializer=self.serializer)
-        except NoSuchJobError:
-            self.remove(job_id)
-        else:
             if job.origin == self.name:
                 return job
+        except NoSuchJobError:
+            self.remove(job_id)
+            self.log.debug('Could not find job %s, removing it from queue.', blue(job_id))
+        return None
 
     def get_job_position(self, job_or_id: Union['Job', str]) -> Optional[int]:
         """Returns the position of a job within the queue

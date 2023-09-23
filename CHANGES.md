@@ -18,6 +18,7 @@
 - Refactor Worker queue validation/parsing
 - Refactor `prepare_for_work` logic
 - Add `unkown` and `starting` WorkerStatus
+- Remove custom `@slow` decorator for Pytest marker with `--include-slow` flag
 
 ### RQ 1.15.1 (2023-06-20)
 
