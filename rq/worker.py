@@ -60,7 +60,7 @@ from rq.job import Job
 from rq.job import JobStatus
 from rq.queue import Queue
 from rq.logutils import blue, green, setup_loghandlers, yellow
-from rq.registries import clean_registries
+from rq.registries import clean_job_registries
 from rq.registries import StartedJobRegistry
 from rq.scheduler import Scheduler
 from rq.serializers import resolve_serializer
@@ -614,7 +614,7 @@ class BaseWorker:
             # to run clean_registries().
             if queue.acquire_maintenance_lock():
                 self.log.info('Cleaning registries for queue: %s', queue.name)
-                clean_registries(queue)
+                clean_job_registries(queue)
                 self.clean_worker_registry(queue)
                 self.clean_intermediate_queue(self, queue)
         self.last_cleaned_at = utils.utcnow()

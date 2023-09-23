@@ -12,7 +12,7 @@ from rq.registries import (
     FailedJobRegistry,
     FinishedJobRegistry,
     StartedJobRegistry,
-    clean_registries,
+    clean_job_registries,
 )
 from rq.serializers import JSONSerializer
 from rq.utils import as_text, current_timestamp
@@ -237,7 +237,7 @@ class TestRegistry(RQTestCase):
         failed_job_registry = FailedJobRegistry(connection=self.testconn)
         self.testconn.zadd(failed_job_registry.key, {'foo': 1})
 
-        clean_registries(queue)
+        clean_job_registries(queue)
         self.assertEqual(self.testconn.zcard(finished_job_registry.key), 0)
         self.assertEqual(self.testconn.zcard(started_job_registry.key), 0)
         self.assertEqual(self.testconn.zcard(failed_job_registry.key), 0)
@@ -256,7 +256,7 @@ class TestRegistry(RQTestCase):
         failed_job_registry = FailedJobRegistry(connection=self.testconn, serializer=JSONSerializer)
         self.testconn.zadd(failed_job_registry.key, {'foo': 1})
 
-        clean_registries(queue)
+        clean_job_registries(queue)
         self.assertEqual(self.testconn.zcard(finished_job_registry.key), 0)
         self.assertEqual(self.testconn.zcard(started_job_registry.key), 0)
         self.assertEqual(self.testconn.zcard(failed_job_registry.key), 0)

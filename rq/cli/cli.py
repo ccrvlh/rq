@@ -31,7 +31,7 @@ from rq.job import JobStatus
 from rq.job import Job
 from rq.logutils import blue
 from rq.main import RQ
-from rq.registries import clean_registries
+from rq.registries import clean_job_registries
 from rq.registries import FailedJobRegistry
 from rq.serializers import DefaultSerializer, SerializerInterface
 from rq.suspension import is_suspended
@@ -138,7 +138,7 @@ def info(cli_config, interval, raw, only_queues, only_workers, by_queue, queues,
                 qs = rq.get_queues()
 
             for queue in qs:
-                clean_registries(queue)
+                clean_job_registries(queue)
                 BaseWorker.clean_worker_registry(queue)
 
             helpers.refresh(interval, func, qs, raw, by_queue, cli_config.queue_class, cli_config.worker_class)

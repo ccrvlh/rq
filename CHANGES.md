@@ -25,6 +25,7 @@
 - Replace Workers's `count` with `get_workers_count` on `RQ` main class
 - RENAME: `registry.py` -> `registries.py`
 - RENAME: `command.py` -> `commands.py`
+- RENAME: `clean_registries` -> `clean_job_registries`
 
 ### RQ 1.15.1 (2023-06-20)
 
