@@ -607,7 +607,7 @@ class BaseWorker:
             if queue.acquire_maintenance_lock():
                 self.log.info('Cleaning registries for queue: %s', queue.name)
                 clean_registries(queue)
-                BaseWorker.clean_worker_registry(queue)
+                self.clean_worker_registry(queue)
                 self.clean_intermediate_queue(self, queue)
         self.last_cleaned_at = utils.utcnow()
 
@@ -1241,6 +1241,7 @@ class BaseWorker:
         pipeline.hincrbyfloat(self.key, 'total_working_time', job_execution_time.total_seconds())
 
     # Class & Dunder
+
     @staticmethod
     def clean_intermediate_queue(worker: 'BaseWorker', queue: Queue) -> None:
         """
