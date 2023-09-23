@@ -13,7 +13,7 @@ from rq.queue import Queue
 from rq.timeouts import DeathPenaltyInterface
 from rq.timeouts import UnixSignalDeathPenalty
 from rq.types import FunctionReferenceType
-from rq.worker import Worker
+from rq.worker import BaseWorker, Worker
 
 
 QueueReference = TypeVar('QueueReference', str, Queue)
@@ -268,7 +268,7 @@ class RQ:
         worker.refresh()
         return worker
 
-    def get_all_workers(
+    def get_workers(
         self,
         connection: Optional['Redis'] = None,
         job_class: Optional[Type['Job']] = None,
@@ -281,20 +281,19 @@ class RQ:
         Returns:
             workers (List[Worker]): A list of workers
         """
-        # if queue:
-        #     connection = queue.connection
-        # elif connection is None:
-        #     connection = get_current_connection()
+        if queue:
+            connection = queue.connection
+        elif connection is None:
+            connection = self.conn
 
-        # worker_keys = BaseWorker.get_keys(queue=queue, connection=connection)
-        # workers = [
-        #     cls.find_by_key(
-        #         key, connection=connection, job_class=job_class, queue_class=queue_class, serializer=serializer
-        #     )
-        #     for key in worker_keys
-        # ]
-        # return utils.compact(workers)
-        pass
+        worker_keys = BaseWorker.get_keys(queue=queue, connection=connection)
+        workers = [
+            BaseWorker.load_by_key(
+                key, connection=connection, job_class=job_class, queue_class=queue_class, serializer=serializer
+            )
+            for key in worker_keys
+        ]
+        return utils.compact(workers)
 
     def get_current_job(self, worker: WorkerReference) -> Optional[Job]:
         """Gets the current job being executed by a worker

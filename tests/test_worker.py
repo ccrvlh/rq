@@ -132,13 +132,13 @@ class TestWorker(RQTestCase):
         w2.register_death()
 
     def test_find_by_key(self):
-        """Worker.find_by_key restores queues, state and job_id."""
+        """Worker.load_by_key restores queues, state and job_id."""
         queues = [Queue('foo'), Queue('bar')]
         w = ForkWorker(queues)
         w.register_death()
         w.register_birth()
         w.set_state(WorkerStatus.STARTED)
-        worker = ForkWorker.find_by_key(w.key)
+        worker = ForkWorker.load_by_key(w.key)
         self.assertEqual(worker.queues, queues)
         self.assertEqual(worker.get_state(), WorkerStatus.STARTED)
         self.assertEqual(worker._job_id, None)
@@ -147,10 +147,10 @@ class TestWorker(RQTestCase):
 
         # If worker is gone, its keys should also be removed
         worker.connection.delete(worker.key)
-        ForkWorker.find_by_key(worker.key)
+        ForkWorker.load_by_key(worker.key)
         self.assertFalse(worker.key in ForkWorker.all_keys(worker.connection))
 
-        self.assertRaises(ValueError, ForkWorker.find_by_key, 'foo')
+        self.assertRaises(ValueError, ForkWorker.load_by_key, 'foo')
 
     def test_worker_ttl(self):
         """Worker ttl."""
@@ -281,7 +281,7 @@ class TestWorker(RQTestCase):
         last_heartbeat = self.testconn.hget(w.key, 'last_heartbeat')
         self.assertIsNotNone(self.testconn.hget(w.key, 'birth'))
         self.assertTrue(last_heartbeat is not None)
-        w = ForkWorker.find_by_key(w.key)
+        w = ForkWorker.load_by_key(w.key)
         self.assertIsInstance(w.last_heartbeat, datetime)
 
         # worker.refresh() shouldn't fail if last_heartbeat is None
@@ -1133,7 +1133,7 @@ class TestWorker(RQTestCase):
         w.refresh()
         self.assertEqual(w.version, '0.0.0')
         # making sure that version is preserved when worker is retrieved by key
-        worker = ForkWorker.find_by_key(w.key)
+        worker = ForkWorker.load_by_key(w.key)
         self.assertEqual(worker.version, '0.0.0')
 
     def test_python_version(self):
@@ -1150,7 +1150,7 @@ class TestWorker(RQTestCase):
         w2.register_birth()
         self.assertEqual(w2.python_version, python_version)
         # making sure that version is preserved when worker is retrieved by key
-        worker = ForkWorker.find_by_key(w2.key)
+        worker = ForkWorker.load_by_key(w2.key)
         self.assertEqual(worker.python_version, python_version)
 
     def test_dequeue_random_strategy(self):

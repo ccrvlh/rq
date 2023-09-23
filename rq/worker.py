@@ -1370,7 +1370,7 @@ class BaseWorker:
                     pipeline.execute()
 
     @classmethod
-    def find_by_key(
+    def load_by_key(
         cls,
         worker_key: str,
         connection: Optional['Redis'] = None,
@@ -1440,7 +1440,7 @@ class BaseWorker:
 
         worker_keys = BaseWorker.get_keys(queue=queue, connection=connection)
         workers = [
-            cls.find_by_key(
+            cls.load_by_key(
                 key, connection=connection, job_class=job_class, queue_class=queue_class, serializer=serializer
             )
             for key in worker_keys

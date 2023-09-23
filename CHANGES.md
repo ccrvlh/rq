@@ -19,6 +19,8 @@
 - Refactor `prepare_for_work` logic
 - Add `unkown` and `starting` WorkerStatus
 - Remove custom `@slow` decorator for Pytest marker with `--include-slow` flag
+- Add `get_queues` to `RQ` main class, replacing `Queue.all()`
+- Replace Worker's `find_by_key` with `load_by_key`
 
 ### RQ 1.15.1 (2023-06-20)
 
