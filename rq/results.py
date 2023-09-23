@@ -14,13 +14,8 @@ from rq.const import ResultType
 from rq.defaults import UNSERIALIZABLE_RETURN_VALUE_PAYLOAD
 from rq.serializers import resolve_serializer
 
-def get_key(job_id):
-    return 'rq:results:%s' % job_id
-
-
 
 class Result:
-
     def __init__(
         self,
         job_id: str,
@@ -74,10 +69,6 @@ class Result:
 
         # return json.dumps(data)
         return data
-
-    @classmethod
-    def get_key(job_id):
-        return 'rq:results:%s' % job_id
 
     @classmethod
     def create(cls, job, type, ttl, return_value=None, exc_string=None, pipeline=None):
