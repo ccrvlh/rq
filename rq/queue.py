@@ -1339,6 +1339,10 @@ class Queue:
         Returns:
             queues (List[Queue]): A list of all queues.
         """
+        warnings.warn(
+            "The `all()` method for the Queue class is deprecated. Use the main RQ class to query for all queues instead.",
+            DeprecationWarning,
+        )
         connection = connection or resolve_connection()
 
         def to_queue(queue_key: Union[bytes, str]):

@@ -142,13 +142,13 @@ class TestWorker(RQTestCase):
         self.assertEqual(worker.queues, queues)
         self.assertEqual(worker.get_state(), WorkerStatus.STARTED)
         self.assertEqual(worker._job_id, None)
-        self.assertTrue(worker.key in ForkWorker.all_keys(worker.connection))
+        self.assertTrue(worker.key in self.rq.get_workers_keys())
         self.assertEqual(worker.version, VERSION)
 
         # If worker is gone, its keys should also be removed
         worker.connection.delete(worker.key)
         ForkWorker.load_by_key(worker.key)
-        self.assertFalse(worker.key in ForkWorker.all_keys(worker.connection))
+        self.assertFalse(worker.key in self.rq.get_workers_keys())
 
         self.assertRaises(ValueError, ForkWorker.load_by_key, 'foo')
 

@@ -295,6 +295,18 @@ class RQ:
         ]
         return utils.compact(workers)
 
+    def get_workers_keys(self, queue: Optional['Queue'] = None) -> List[str]:
+        """List of worker keys
+
+        Args:
+            connection (Optional[Redis], optional): A Redis Connection. Defaults to None.
+            queue (Optional[Queue], optional): The Queue. Defaults to None.
+
+        Returns:
+            list_keys (List[str]): A list of worker keys
+        """
+        return [utils.as_text(key) for key in BaseWorker.get_keys(queue=queue, connection=self.conn)]
+
     def get_current_job(self, worker: WorkerReference) -> Optional[Job]:
         """Gets the current job being executed by a worker
 

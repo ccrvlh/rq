@@ -1458,6 +1458,10 @@ class BaseWorker:
         Returns:
             list_keys (List[str]): A list of worker keys
         """
+        warnings.warn(
+            "The `all_keys()` method for the Worker class is deprecated. Use the main RQ class to query for all workers' keys instead.",
+            DeprecationWarning,
+        )
         return [utils.as_text(key) for key in BaseWorker.get_keys(queue=queue, connection=connection)]
 
     @classmethod
