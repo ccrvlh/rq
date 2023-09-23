@@ -1433,6 +1433,11 @@ class BaseWorker:
         Returns:
             workers (List[Worker]): A list of workers
         """
+        warnings.warn(
+            "V2 Deprecation Warning: The `all()` method for the Worker class is deprecated. Use the main RQ class to get all workers with `get_workers` instead.",
+            DeprecationWarning,
+        )
+
         if queue:
             connection = queue.connection
         elif connection is None:
@@ -1459,7 +1464,7 @@ class BaseWorker:
             list_keys (List[str]): A list of worker keys
         """
         warnings.warn(
-            "The `all_keys()` method for the Worker class is deprecated. Use the main RQ class to query for all workers' keys instead.",
+            "V2 Deprecation Warning: The `all_keys()` method for the Worker class is deprecated. Use the main RQ class to query for all workers' keys instead.",
             DeprecationWarning,
         )
         return [utils.as_text(key) for key in BaseWorker.get_keys(queue=queue, connection=connection)]
@@ -1475,6 +1480,10 @@ class BaseWorker:
         Returns:
             length (int): The queue length.
         """
+        warnings.warn(
+            "V2 Deprecation Warning: The `count()` method for the Worker class is deprecated. Use the main RQ class to count workers with `get_workers_count` instead.",
+            DeprecationWarning,
+        )
         return len(BaseWorker.get_keys(queue=queue, connection=connection))
 
     def __eq__(self, other):

@@ -20,11 +20,11 @@ class TestWorkerRegistry(RQTestCase):
         redis = worker.connection
 
         self.assertTrue(redis.sismember(worker.redis_workers_keys, worker.key))
-        self.assertEqual(ForkWorker.count(connection=redis), 1)
+        self.assertEqual(self.rq.count_workers(), 1)
         self.assertTrue(redis.sismember(WORKERS_BY_QUEUE_KEY % foo_queue.name, worker.key))
-        self.assertEqual(ForkWorker.count(queue=foo_queue), 1)
+        self.assertEqual(self.rq.count_workers(queue=foo_queue), 1)
         self.assertTrue(redis.sismember(WORKERS_BY_QUEUE_KEY % bar_queue.name, worker.key))
-        self.assertEqual(ForkWorker.count(queue=bar_queue), 1)
+        self.assertEqual(self.rq.count_workers(queue=bar_queue), 1)
 
         BaseWorker.unregister(worker)
         self.assertFalse(redis.sismember(worker.redis_workers_keys, worker.key))

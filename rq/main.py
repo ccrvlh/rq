@@ -86,6 +86,10 @@ class RQ:
         return "rq:queues"
 
     @property
+    def workers_keys(self) -> str:
+        return "rq:workers"
+
+    @property
     def pubsub_channel(self) -> str:
         return "rq:pubsub:"
 
@@ -296,16 +300,31 @@ class RQ:
         return utils.compact(workers)
 
     def get_workers_keys(self, queue: Optional['Queue'] = None) -> List[str]:
-        """List of worker keys
+        """List of worker keys.
+        If queue is provided, it filters the workers by queue.
 
         Args:
-            connection (Optional[Redis], optional): A Redis Connection. Defaults to None.
             queue (Optional[Queue], optional): The Queue. Defaults to None.
 
         Returns:
             list_keys (List[str]): A list of worker keys
         """
-        return [utils.as_text(key) for key in BaseWorker.get_keys(queue=queue, connection=self.conn)]
+        redis_key = self.workers_keys
+        if queue:
+            redis_key = self.workers_keys + f":{queue.name}"
+
+        return [utils.as_text(key) for key in self.conn.smembers(redis_key)]
+
+    def get_workers_count(self, queue: Optional['Queue'] = None) -> int:
+        """Returns the number of workers by queue or connection.
+
+        Args:
+            queue (Optional[Queue], optional): The queue to use. Defaults to None.
+
+        Returns:
+            length (int): The queue length.
+        """
+        return len(self.get_workers_keys(queue))
 
     def get_current_job(self, worker: WorkerReference) -> Optional[Job]:
         """Gets the current job being executed by a worker
