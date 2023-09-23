@@ -37,7 +37,7 @@ from rq.serializers import DefaultSerializer, SerializerInterface
 from rq.suspension import is_suspended
 from rq.suspension import resume as connection_resume
 from rq.suspension import suspend as connection_suspend
-from rq.worker import BaseWorker
+from rq.worker import Worker
 from rq.worker import ForkWorker
 from rq.worker_pool import WorkerPool
 
@@ -139,7 +139,7 @@ def info(cli_config, interval, raw, only_queues, only_workers, by_queue, queues,
 
             for queue in qs:
                 clean_job_registries(queue)
-                BaseWorker.clean_worker_registry(queue)
+                Worker.clean_worker_registry(queue)
 
             helpers.refresh(interval, func, qs, raw, by_queue, cli_config.queue_class, cli_config.worker_class)
     except ConnectionError as e:

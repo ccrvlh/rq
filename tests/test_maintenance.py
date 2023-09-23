@@ -6,7 +6,7 @@ from redis import Redis
 from rq.job import JobStatus
 from rq.queue import Queue
 from rq.utils import get_version
-from rq.worker import BaseWorker
+from rq.worker import Worker
 from rq.worker import ForkWorker
 
 from tests import RQTestCase
@@ -32,6 +32,6 @@ class MaintenanceTestCase(RQTestCase):
             self.assertIsNotNone(self.testconn.lpos(queue.intermediate_queue_key, job.id))
             # After cleaning up the intermediate queue, job status should be `FAILED`
             # and job is also removed from the intermediate queue
-            BaseWorker.clean_intermediate_queue(worker, queue)
+            Worker.clean_intermediate_queue(worker, queue)
             self.assertEqual(job.get_status(), JobStatus.FAILED)
             self.assertIsNone(self.testconn.lpos(queue.intermediate_queue_key, job.id))

@@ -6,11 +6,11 @@ from rq.defaults import WORKERS_SUSPENDED
 if TYPE_CHECKING:
     from redis import Redis
 
-    from rq.worker import BaseWorker
+    from rq.worker import Worker
 
 
 
-def is_suspended(connection: 'Redis', worker: Optional['BaseWorker'] = None):
+def is_suspended(connection: 'Redis', worker: Optional['Worker'] = None):
     """Checks whether a Worker is suspendeed on a given connection
     PS: pipeline returns a list of responses
     Ref: https://github.com/andymccurdy/redis-py#pipelines

@@ -21,7 +21,7 @@ from rq.defaults import DEFAULT_LOGGING_FORMAT
 from rq.job import Job
 from rq.logutils import setup_loghandlers
 from rq.queue import Queue
-from rq.worker import BaseWorker
+from rq.worker import Worker
 from rq.worker import ForkWorker
 
 
@@ -42,7 +42,7 @@ class WorkerPool:
         queues: List[Union[str, Queue]],
         connection: Redis,
         num_workers: int = 1,
-        worker_class: Type[BaseWorker] = ForkWorker,
+        worker_class: Type[Worker] = ForkWorker,
         serializer: Type[SerializerInterface] = DefaultSerializer,
         job_class: Type[Job] = Job,
         *args,
@@ -58,7 +58,7 @@ class WorkerPool:
         self._burst: bool = True
         self._sleep: int = 0
         self.status: self.Status = self.Status.IDLE  # type: ignore
-        self.worker_class: Type[BaseWorker] = worker_class
+        self.worker_class: Type[Worker] = worker_class
         self.serializer: Type[SerializerInterface] = serializer
         self.job_class: Type[Job] = job_class
 
@@ -235,7 +235,7 @@ def run_worker(
     connection_class,
     connection_pool_class,
     connection_pool_kwargs: dict,
-    worker_class: Type[BaseWorker] = ForkWorker,
+    worker_class: Type[Worker] = ForkWorker,
     serializer: Type[DefaultSerializer] = DefaultSerializer,
     job_class: Type[Job] = Job,
     burst: bool = True,

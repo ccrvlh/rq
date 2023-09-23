@@ -13,7 +13,7 @@ from rq.queue import Queue
 from rq.timeouts import DeathPenaltyInterface
 from rq.timeouts import UnixSignalDeathPenalty
 from rq.types import FunctionReferenceType
-from rq.worker import BaseWorker, Worker
+from rq.worker import Worker, Worker
 
 
 QueueReference = TypeVar('QueueReference', str, Queue)
@@ -27,7 +27,7 @@ class RQ:
         connection: Optional[Redis] = None,
         queue: Optional[str] = None,
         queues: Optional[List[str]] = None,
-        namespace: Optional[str] = None,
+        namespace: Optional[str] = "rq",
         redis_url: Optional[str] = None,
         job_id_prefix: Optional[str] = None,
         worker_prefix: Optional[str] = None,
@@ -47,7 +47,7 @@ class RQ:
     ):
         self._queue = queue
         self._queues = queues
-        self._namespace = namespace
+        self.namespace = namespace
         self._connection = connection
         self._redis_url = redis_url
         self._job_id_prefix = job_id_prefix
@@ -71,27 +71,27 @@ class RQ:
 
     @property
     def queue_namespace(self) -> str:
-        return "rq:queue:"
+        return f"{self.namespace}:queue:"
 
     @property
     def jobs_namespace(self) -> str:
-        return "rq:job:"
+        return f"{self.namespace}:job:"
 
     @property
     def workers_namespace(self) -> str:
-        return "rq:worker:"
+        return f"{self.namespace}:worker:"
 
     @property
     def queue_keys(self) -> str:
-        return "rq:queues"
+        return f"{self.namespace}:queues"
 
     @property
     def workers_keys(self) -> str:
-        return "rq:workers"
+        return f"{self.namespace}:workers"
 
     @property
     def pubsub_channel(self) -> str:
-        return "rq:pubsub:"
+        return f"{self.namespace}:pubsub:"
 
     @property
     def conn(self) -> Redis:
@@ -235,6 +235,12 @@ class RQ:
         all_queues = [to_queue(rq_key) for rq_key in all_registerd_queues if rq_key]
         return all_queues
 
+    def get_queues_keys(self):
+        pass
+
+    def get_queues_count(self):
+        pass
+
     # Workers
 
     def get_worker(
@@ -290,9 +296,9 @@ class RQ:
         elif connection is None:
             connection = self.conn
 
-        worker_keys = BaseWorker.get_keys(queue=queue, connection=connection)
+        worker_keys = Worker.get_keys(queue=queue, connection=connection)
         workers = [
-            BaseWorker.load_by_key(
+            Worker.load_by_key(
                 key, connection=connection, job_class=job_class, queue_class=queue_class, serializer=serializer
             )
             for key in worker_keys

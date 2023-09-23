@@ -94,7 +94,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger("rq.worker")
 
 
-class BaseWorker:
+class Worker:
     redis_worker_namespace_prefix = 'rq:worker:'
     """ The Redis key namespace used for all keys set by RQ for a worker. """
 
@@ -434,6 +434,16 @@ class BaseWorker:
 
     def get_heartbeat_ttl(self, job: 'Job') -> int:
         """Get's the TTL for the next heartbeat.
+        SimpleWorker Code:
+
+        Example::
+            ..code-block:: python
+
+                >>> def get_heartbeat_ttl(self, job):
+                >>>     if job.timeout == -1:
+                >>>         return DEFAULT_WORKER_TTL
+                >>>     else:
+                >>>         return int((job.timeout or DEFAULT_WORKER_TTL)) + 60
 
         Args:
             job (Job): The Job
@@ -446,7 +456,7 @@ class BaseWorker:
             return int(min(remaining_execution_time, self.job_monitoring_interval)) + 60
         else:
             return self.job_monitoring_interval + 60
-
+        
     def maintain_heartbeats(self, job: 'Job'):
         """Updates worker and job's last heartbeat field. If job was
         enqueued with `result_ttl=0`, a race condition could happen where this heartbeat
@@ -508,7 +518,7 @@ class BaseWorker:
         with self.connection.pipeline() as p:
             # We cannot use self.get_state() = 'dead' here, because that would
             # rollback the pipeline
-            BaseWorker.unregister(self, p)
+            Worker.unregister(self, p)
             p.hset(self.key, 'death', utils.utcformat(utils.utcnow()))
             p.expire(self.key, 60)
             p.execute()
@@ -884,8 +894,10 @@ class BaseWorker:
         return True
 
     def execute_job(self, job: 'Job', queue: 'Queue'):
-        """To be implemented by subclasses."""
-        raise NotImplementedError("Job execution should be implemented by specific Worker Implementations")
+        """Execute job in same thread/process, do not fork()"""
+        self.set_state(WorkerStatus.BUSY)
+        self.perform_job(job, queue)
+        self.set_state(WorkerStatus.IDLE)
 
     def work(
         self,
@@ -1263,7 +1275,7 @@ class BaseWorker:
     # Class & Dunder
 
     @staticmethod
-    def clean_intermediate_queue(worker: 'BaseWorker', queue: Queue) -> None:
+    def clean_intermediate_queue(worker: 'Worker', queue: Queue) -> None:
         """
         Check whether there are any jobs stuck in the intermediate queue.
 
@@ -1282,7 +1294,7 @@ class BaseWorker:
                 queue.connection.lrem(queue.intermediate_queue_key, 1, job_id)
 
     @staticmethod
-    def register(worker: 'BaseWorker', pipeline: Optional['Pipeline'] = None):
+    def register(worker: 'Worker', pipeline: Optional['Pipeline'] = None):
         """
         Store worker key in Redis so we can easily discover active workers.
 
@@ -1297,7 +1309,7 @@ class BaseWorker:
             connection.sadd(redis_key, worker.key)
 
     @staticmethod
-    def unregister(worker: 'BaseWorker', pipeline: Optional['Pipeline'] = None):
+    def unregister(worker: 'Worker', pipeline: Optional['Pipeline'] = None):
         """Remove Worker key from Redis
 
         Args:
@@ -1377,7 +1389,7 @@ class BaseWorker:
         job_class: Optional[Type['Job']] = None,
         queue_class: Optional[Type['Queue']] = None,
         serializer=None,
-    ) -> Optional['BaseWorker']:
+    ) -> Optional['Worker']:
         """Returns a Worker instance, based on the naming conventions for
         naming the internal Redis keys.  Can be used to reverse-lookup Workers
         by their Redis keys.
@@ -1443,7 +1455,7 @@ class BaseWorker:
         elif connection is None:
             connection = get_current_connection()
 
-        worker_keys = BaseWorker.get_keys(queue=queue, connection=connection)
+        worker_keys = Worker.get_keys(queue=queue, connection=connection)
         workers = [
             cls.load_by_key(
                 key, connection=connection, job_class=job_class, queue_class=queue_class, serializer=serializer
@@ -1467,7 +1479,7 @@ class BaseWorker:
             "V2 Deprecation Warning: The `all_keys()` method for the Worker class is deprecated. Use the main RQ class to query for all workers' keys with `get_workers_keys` instead.",
             DeprecationWarning,
         )
-        return [utils.as_text(key) for key in BaseWorker.get_keys(queue=queue, connection=connection)]
+        return [utils.as_text(key) for key in Worker.get_keys(queue=queue, connection=connection)]
 
     @classmethod
     def count(cls, connection: Optional['Redis'] = None, queue: Optional['Queue'] = None) -> int:
@@ -1484,7 +1496,7 @@ class BaseWorker:
             "V2 Deprecation Warning: The `count()` method for the Worker class is deprecated. Use the main RQ class to count workers with `get_workers_count` instead.",
             DeprecationWarning,
         )
-        return len(BaseWorker.get_keys(queue=queue, connection=connection))
+        return len(Worker.get_keys(queue=queue, connection=connection))
 
     def __eq__(self, other):
         """Equality does not take the database/connection into account"""
@@ -1497,30 +1509,7 @@ class BaseWorker:
         return hash(self.name)
 
 
-class Worker(BaseWorker):
-    def execute_job(self, job: 'Job', queue: 'Queue'):
-        """Execute job in same thread/process, do not fork()"""
-        self.set_state(WorkerStatus.BUSY)
-        self.perform_job(job, queue)
-        self.set_state(WorkerStatus.IDLE)
-
-    def get_heartbeat_ttl(self, job: 'Job') -> int:
-        """-1" means that jobs never timeout. In this case, we should _not_ do -1 + 60 = 59.
-        We should just stick to DEFAULT_WORKER_TTL.
-
-        Args:
-            job (Job): The Job
-
-        Returns:
-            ttl (int): TTL
-        """
-        if job.timeout == -1:
-            return DEFAULT_WORKER_TTL
-        else:
-            return int((job.timeout or DEFAULT_WORKER_TTL)) + 60
-
-
-class ForkWorker(BaseWorker):
+class ForkWorker(Worker):
     def __init__(self, queues, name: str | None = None, default_result_ttl=DEFAULT_RESULT_TTL, connection: Redis | None = None, exc_handler=None, exception_handlers=None, default_worker_ttl=DEFAULT_WORKER_TTL, maintenance_interval: int = DEFAULT_MAINTENANCE_TASK_INTERVAL, job_class: type[Job] | None = None, queue_class: type[Queue] | None = None, log_job_description: bool = True, job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL, disable_default_exception_handler: bool = False, prepare_for_work: bool = True, serializer=None, work_horse_killed_handler: Callable[[Job, int, int, 'struct_rusage'], None] | None = None):
         super().__init__(queues, name, default_result_ttl, connection, exc_handler, exception_handlers, default_worker_ttl, maintenance_interval, job_class, queue_class, log_job_description, job_monitoring_interval, disable_default_exception_handler, prepare_for_work, serializer)
         self._is_horse: bool = False
@@ -1739,7 +1728,7 @@ class ForkWorker(BaseWorker):
             self.unsubscribe()
 
 
-class ThreadPoolWorker(BaseWorker):
+class ThreadPoolWorker(Worker):
     death_penalty_class = TimerDeathPenalty
 
     def __init__(self, *args, **kwargs):
