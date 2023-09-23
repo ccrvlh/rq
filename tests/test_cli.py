@@ -9,13 +9,15 @@ from time import sleep
 from uuid import uuid4
 from click.testing import CliRunner
 from redis import Redis
+
 from tests import RQTestCase
 from tests.fixtures import say_hello
 from tests.fixtures import div_by_zero
 
 from rq import Queue
 from rq.cli import main
-from rq.cli.helpers import CliConfig, parse_function_arg
+from rq.cli.helpers import CliConfig
+from rq.cli.helpers import parse_function_arg
 from rq.cli.helpers import parse_schedule
 from rq.cli.helpers import read_config_file
 from rq.job import Job
@@ -527,7 +529,7 @@ class TestRQCli(CLITestCase):
 
         runner = CliRunner()
         result = runner.invoke(
-            main, ['enqueue', '-u', self.redis_url, 'tests.fixtures.say_hello', '--schedule-in', '10s']
+            main, ['enqueue', '-u', self.redis_url, 'tests.fixtures.say_hello', '--schedule-in', '2s']
         )
         self.assert_normal_execution(result)
 
@@ -539,7 +541,7 @@ class TestRQCli(CLITestCase):
 
         self.assertFalse(worker.work(True))
 
-        sleep(11)
+        sleep(3)
 
         scheduler.enqueue_scheduled_jobs()
 
