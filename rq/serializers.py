@@ -1,8 +1,6 @@
 import json
 import pickle
 
-from abc import abstractmethod
-
 from typing import Optional
 from typing import Type
 from typing import Union
@@ -13,13 +11,11 @@ from rq import utils
 class SerializerInterface:
     """Interface for serializer objects."""
 
-    @abstractmethod
     @staticmethod
     def dumps(*args, **kwargs):
         """Serialize an object into a string."""
         raise NotImplementedError
 
-    @abstractmethod
     @staticmethod
     def loads(s, *args, **kwargs):
         """Deserialize a string into an object."""
@@ -66,7 +62,7 @@ def resolve_serializer(serializer: Optional[Union[Type[SerializerInterface], str
         return DefaultSerializer
 
     if isinstance(serializer, str):
-        _serializer = utils.import_attribute(serializer)
+        serializer = utils.import_attribute(serializer)
 
     default_serializer_methods = ('dumps', 'loads')
 
@@ -74,4 +70,4 @@ def resolve_serializer(serializer: Optional[Union[Type[SerializerInterface], str
         if not hasattr(serializer, instance_method):
             raise NotImplementedError('Serializer should implement (dumps, loads) methods.')
 
-    return _serializer
+    return serializer
