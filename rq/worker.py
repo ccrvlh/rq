@@ -1043,6 +1043,24 @@ class BaseWorker:
 
         self.handle_warm_shutdown_request()
         self._shutdown()
+    
+    def request_force_stop(self, signum: int, frame: Optional[FrameType]):
+        """Terminates the application (cold shutdown).
+
+        Args:
+            signum (Any): Signum
+            frame (Any): Frame
+
+        Raises:
+            SystemExit: SystemExit
+        """
+        if (utils.utcnow() - self._shutdown_requested_date) < timedelta(seconds=1):  # type: ignore
+            self.log.debug('Shutdown signal ignored, received twice in less than 1 second')
+            return
+
+        self.log.warning('Cold shut down')
+        self.log.debug('Taking down worker %s with me', self.pid)
+        raise SystemExit()
 
     def _shutdown(self):
         """
