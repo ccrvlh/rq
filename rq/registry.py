@@ -2,12 +2,12 @@ import calendar
 import logging
 import time
 import traceback
+
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, List, Optional, Type, Union
+
 from rq import utils
-
 from rq.serializers import resolve_serializer
-
 from rq.timeouts import DeathPenaltyInterface
 from rq.timeouts import UnixSignalDeathPenalty
 from rq.connections import resolve_connection
@@ -17,7 +17,6 @@ from rq.exceptions import InvalidJobOperation
 from rq.exceptions import NoSuchJobError
 from rq.job import Job, JobStatus
 from rq.queue import Queue
-from rq.utils import as_text, backend_class
 
 
 if TYPE_CHECKING:
