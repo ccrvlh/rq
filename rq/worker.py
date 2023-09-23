@@ -794,7 +794,7 @@ class BaseWorker:
 
             job.prepare_for_execution(self.name, pipeline=pipeline)
             if remove_from_intermediate_queue:
-                from .queue import Queue
+                from rq.queue import Queue
 
                 queue = Queue(job.origin, connection=self.connection)
                 pipeline.lrem(queue.intermediate_queue_key, 1, job.id)

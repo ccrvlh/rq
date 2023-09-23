@@ -353,7 +353,7 @@ def get_call_string(
 
 def parse_names(queues_or_names: List[Union[str, 'Queue']]) -> List[str]:
     """Given a list of strings or queues, returns queue names"""
-    from .queue import Queue
+    from rq.queue import Queue
 
     names = []
     for queue_or_name in queues_or_names:

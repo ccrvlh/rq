@@ -117,7 +117,7 @@ class Job:
         self.allow_dependency_failures: Optional[bool] = None
         self.enqueue_at_front: Optional[bool] = None
 
-        from .results import Result
+        from rq.results import Result
 
         self._cached_result: Optional[Result] = None
 
@@ -320,7 +320,7 @@ class Job:
         """
         warnings.warn("job.exc_info is deprecated, use job.latest_result() instead.", DeprecationWarning)
 
-        from .results import Result
+        from rq.results import Result
 
         if self.supports_redis_streams:
             if not self._cached_result:
@@ -351,7 +351,7 @@ class Job:
 
         warnings.warn("job.result is deprecated, use job.return_value instead.", DeprecationWarning)
 
-        from .results import Result
+        from rq.results import Result
 
         if self.supports_redis_streams:
             if not self._cached_result:
@@ -389,7 +389,7 @@ class Job:
 
     @property
     def started_job_registry(self):
-        from .registry import StartedJobRegistry
+        from rq.registry import StartedJobRegistry
 
         return StartedJobRegistry(
             self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -397,7 +397,7 @@ class Job:
 
     @property
     def failed_job_registry(self):
-        from .registry import FailedJobRegistry
+        from rq.registry import FailedJobRegistry
 
         return FailedJobRegistry(
             self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -405,7 +405,7 @@ class Job:
 
     @property
     def finished_job_registry(self):
-        from .registry import FinishedJobRegistry
+        from rq.registry import FinishedJobRegistry
 
         return FinishedJobRegistry(
             self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -422,7 +422,7 @@ class Job:
         Returns:
             position (Optional[int]): The position
         """
-        from .queue import Queue
+        from rq.queue import Queue
 
         if self.origin:
             q = Queue(name=self.origin, connection=self.connection)
@@ -612,7 +612,7 @@ class Job:
         Args:
             pipeline (Optional[Pipeline]): The Redis' pipeline. Defaults to None
         """
-        from .registry import DeferredJobRegistry
+        from rq.registry import DeferredJobRegistry
 
         registry = DeferredJobRegistry(
             self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -779,8 +779,8 @@ class Job:
         """
         if self.is_canceled:
             raise InvalidJobOperation("Cannot cancel already canceled job: {}".format(self.get_id()))
-        from .queue import Queue
-        from .registry import CanceledJobRegistry
+        from rq.queue import Queue
+        from rq.registry import CanceledJobRegistry
 
         pipe = pipeline or self.connection.pipeline()
 
@@ -875,7 +875,7 @@ class Job:
         Returns:
             result (Optional[Any]): The job return value.
         """
-        from .results import Result
+        from rq.results import Result
 
         if refresh:
             self._cached_result = None
@@ -905,7 +905,7 @@ class Job:
         Returns:
             all_results (List[Result]): A list of 'Result' objects
         """
-        from .results import Result
+        from rq.results import Result
 
         return Result.all(self, serializer=self.serializer)
 
@@ -918,21 +918,21 @@ class Job:
         Returns:
             result (Result): The Result object
         """
-        from .results import Result
+        from rq.results import Result
 
         return Result.fetch_latest(self, serializer=self.serializer, timeout=timeout)
 
     def _remove_from_registries(self, pipeline: Optional['Pipeline'] = None, remove_from_queue: bool = True):
-        from .registry import BaseRegistry
+        from rq.registry import BaseRegistry
 
         if remove_from_queue:
-            from .queue import Queue
+            from rq.queue import Queue
 
             q = Queue(name=self.origin, connection=self.connection, serializer=self.serializer)
             q.remove(self, pipeline=pipeline)
         registry: BaseRegistry
         if self.is_finished:
-            from .registry import FinishedJobRegistry
+            from rq.registry import FinishedJobRegistry
 
             registry = FinishedJobRegistry(
                 self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -940,7 +940,7 @@ class Job:
             registry.remove(self, pipeline=pipeline)
 
         elif self.is_deferred:
-            from .registry import DeferredJobRegistry
+            from rq.registry import DeferredJobRegistry
 
             registry = DeferredJobRegistry(
                 self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -948,7 +948,7 @@ class Job:
             registry.remove(self, pipeline=pipeline)
 
         elif self.is_started:
-            from .registry import StartedJobRegistry
+            from rq.registry import StartedJobRegistry
 
             registry = StartedJobRegistry(
                 self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -956,7 +956,7 @@ class Job:
             registry.remove(self, pipeline=pipeline)
 
         elif self.is_scheduled:
-            from .registry import ScheduledJobRegistry
+            from rq.registry import ScheduledJobRegistry
 
             registry = ScheduledJobRegistry(
                 self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -967,7 +967,7 @@ class Job:
             self.failed_job_registry.remove(self, pipeline=pipeline)
 
         elif self.is_canceled:
-            from .registry import CanceledJobRegistry
+            from rq.registry import CanceledJobRegistry
 
             registry = CanceledJobRegistry(
                 self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -1048,7 +1048,7 @@ class Job:
         # for Redis < 5.0 is dropped. job.save(include_result=...) is used to test
         # for backward compatibility
         if self.supports_redis_streams:
-            from .results import Result
+            from rq.results import Result
 
             Result.create(self, ResultType.SUCCESSFUL, return_value=self._result, ttl=result_ttl, pipeline=pipeline)
 
@@ -1069,7 +1069,7 @@ class Job:
             _save_exc_to_job=_save_exc_to_job,
         )
         if self.supports_redis_streams:
-            from .results import Result
+            from rq.results import Result
 
             Result.create_failure(self, self.failure_ttl, exc_string=exc_string, pipeline=pipeline)
 

@@ -9,7 +9,7 @@ from rq.utils import backend_class
 
 if TYPE_CHECKING:
     from redis import Redis
-    from .job import Retry
+    from rq.job import Retry
 
 
 class job:  # noqa
