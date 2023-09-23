@@ -15,7 +15,7 @@ from redis import WatchError
 from rq.defaults import CALLBACK_TIMEOUT
 from rq.defaults import UNSERIALIZABLE_RETURN_VALUE_PAYLOAD
 from rq.local import LocalStack
-from rq.timeouts import BaseDeathPenalty
+from rq.timeouts import DeathPenaltyInterface
 from rq.timeouts import JobTimeoutException
 
 from rq import utils
@@ -997,7 +997,7 @@ class Job:
             connection.expire(self.dependents_key, ttl)
             connection.expire(self.dependencies_key, ttl)
 
-    def execute_success_callback(self, death_penalty_class: Type[BaseDeathPenalty], result: Any):
+    def execute_success_callback(self, death_penalty_class: Type[DeathPenaltyInterface], result: Any):
         """Executes success_callback for a job.
         with timeout .
 
@@ -1012,7 +1012,7 @@ class Job:
         with death_penalty_class(self.success_callback_timeout, JobTimeoutException, job_id=self.id):
             self.success_callback(self, self.connection, result)
 
-    def execute_failure_callback(self, death_penalty_class: Type[BaseDeathPenalty], *exc_info):
+    def execute_failure_callback(self, death_penalty_class: Type[DeathPenaltyInterface], *exc_info):
         """Executes failure_callback with possible timeout"""
         if not self.failure_callback:
             return
@@ -1025,7 +1025,7 @@ class Job:
             logger.exception(f'Job {self.id}: error while executing failure callback')
             raise
 
-    def execute_stopped_callback(self, death_penalty_class: Type[BaseDeathPenalty]):
+    def execute_stopped_callback(self, death_penalty_class: Type[DeathPenaltyInterface]):
         """Executes stopped_callback with possible timeout"""
         logger.debug('Running stopped callbacks for %s', self.id)
         try:

@@ -17,7 +17,8 @@ from datetime import datetime
 from datetime import timedelta
 from random import shuffle
 from types import FrameType
-from typing import TYPE_CHECKING, Set
+from typing import TYPE_CHECKING
+from typing import Set
 from typing import Union
 from typing import Type
 from typing import Tuple
@@ -64,6 +65,7 @@ from rq.registry import StartedJobRegistry
 from rq.scheduler import Scheduler
 from rq.serializers import resolve_serializer
 from rq.suspension import is_suspended
+from rq.timeouts import DeathPenaltyInterface
 from rq.timeouts import TimerDeathPenalty
 from rq.timeouts import JobTimeoutException
 from rq.timeouts import UnixSignalDeathPenalty
@@ -99,7 +101,7 @@ class BaseWorker:
     redis_workers_keys = REDIS_WORKER_KEYS
     """ The Redis key namespace used for all keys set by RQ for a worker. """
 
-    death_penalty_class = UnixSignalDeathPenalty
+    death_penalty_class: DeathPenaltyInterface = UnixSignalDeathPenalty
     """ The default death penalty class. """
 
     queue_class = Queue
@@ -234,7 +236,7 @@ class BaseWorker:
         if death_timestamp is not None:
             return utils.utcparse(utils.as_text(death_timestamp))
 
-    # Getters / Setters
+    # Setup Setters
 
     def _parse_queues(self, queues: Union[str, List[str]]) -> List['Queue']:
         queues_lists = [
@@ -1765,10 +1767,12 @@ class ThreadPoolWorker(BaseWorker):
         self,
         burst: bool = False,
         logging_level: str = "INFO",
-        date_format=DEFAULT_LOGGING_DATE_FORMAT,
-        log_format=DEFAULT_LOGGING_FORMAT,
-        max_jobs=None,
+        date_format: str = DEFAULT_LOGGING_DATE_FORMAT,
+        log_format: str = DEFAULT_LOGGING_FORMAT,
+        max_jobs: Optional[int] = None,
+        max_idle_time: Optional[int] = None,
         with_scheduler: bool = False,
+        dequeue_strategy: DequeueStrategy = DequeueStrategy.DEFAULT,
     ):
         """Starts the work loop.
 
@@ -1800,14 +1804,14 @@ class ThreadPoolWorker(BaseWorker):
 
                     if self.is_pool_full:
                         self.log.debug('ThreadPool is full, waiting for idle threads...')
-                        self.__wait_for_slot()
+                        self._wait_for_slot()
 
                     timeout = None if burst else self.dequeue_timeout
                     result = self.dequeue_job_and_maintain_ttl(timeout)
                     if result is None:
                         if not burst:
                             break
-                        has_pending_dependents = self.__check_pending_dependents()
+                        has_pending_dependents = self._check_pending_dependents()
                         if has_pending_dependents:
                             continue
                         self.log.info("Worker %s: done, quitting", self.key)
@@ -1854,7 +1858,7 @@ class ThreadPoolWorker(BaseWorker):
             Args:
                 future (Future): The Future object.
             """
-            self.__change_idle_counter(+1)
+            self._change_idle_counter(+1)
             self.heartbeat()
             job_element = list(filter(lambda x: id(x[1]) == id(future), self._current_jobs))
             for el in job_element:
@@ -1865,14 +1869,14 @@ class ThreadPoolWorker(BaseWorker):
         self.log.info("Executing job %s from %s", blue(job.id), green(queue.name))
         future = self.executor.submit(self.perform_job, job, queue)
         self._current_jobs.append((job, future))
-        self.__change_idle_counter(-1)
+        self._change_idle_counter(-1)
         future.add_done_callback(job_done)
 
     def wait_all(self, timeout: Optional[int] = None):
         """ Wait all current jobs """
         wait([future for _, future in self._current_jobs])
 
-    def __change_idle_counter(self, operation: int):
+    def _change_idle_counter(self, operation: int):
         """Updates the idle threads counter using a lock to make it safe.
 
         Args:
@@ -1881,7 +1885,7 @@ class ThreadPoolWorker(BaseWorker):
         with self._lock:
             self._idle_threads += operation
 
-    def __wait_for_slot(self, wait_interval: float = 0.25):
+    def _wait_for_slot(self, wait_interval: float = 0.25):
         """Waits for a free slot in the thread pool.
         Sleeps for `wait_interval` seconds to avoid high CPU burden on long jobs.
 
@@ -1895,7 +1899,7 @@ class ThreadPoolWorker(BaseWorker):
             time.sleep(wait_interval)
             continue
 
-    def __check_pending_dependents(self) -> bool:
+    def _check_pending_dependents(self) -> bool:
         """Checks whether any job that's current being executed in the pool has dependents.
         If there are dependents, appends it to a `pending_dependents` array.
         If this array has items (> 0), we know something that's currently running must enqueue dependents

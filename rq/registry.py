@@ -8,7 +8,7 @@ from rq import utils
 
 from rq.serializers import resolve_serializer
 
-from rq.timeouts import BaseDeathPenalty
+from rq.timeouts import DeathPenaltyInterface
 from rq.timeouts import UnixSignalDeathPenalty
 from rq.connections import resolve_connection
 from rq.defaults import DEFAULT_FAILURE_TTL
@@ -46,7 +46,7 @@ class BaseRegistry:
         job_class: Optional[Type['Job']] = None,
         queue: Optional['Queue'] = None,
         serializer: Any = None,
-        death_penalty_class: Optional[Type[BaseDeathPenalty]] = None,
+        death_penalty_class: Optional[Type[DeathPenaltyInterface]] = None,
     ):
         if queue:
             self.name = queue.name

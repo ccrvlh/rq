@@ -2,11 +2,14 @@ import ctypes
 import signal
 import threading
 
+from abc import ABCMeta
+from abc import abstractmethod
+
 from rq.exceptions import BaseTimeoutException
 from rq.exceptions import JobTimeoutException
 
 
-class BaseDeathPenalty:
+class DeathPenaltyInterface(ABCMeta):
     """Base class to setup job timeouts."""
 
     def __init__(self, timeout, exception=BaseTimeoutException, **kwargs):
@@ -32,14 +35,24 @@ class BaseDeathPenalty:
         # invoking context.
         return False
 
+    @abstractmethod
+    def new_timer(self):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def handle_death_penalty(self):
+        raise NotImplementedError()
+
+    @abstractmethod
     def setup_death_penalty(self):
         raise NotImplementedError()
 
+    @abstractmethod
     def cancel_death_penalty(self):
         raise NotImplementedError()
 
 
-class UnixSignalDeathPenalty(BaseDeathPenalty):
+class UnixSignalDeathPenalty(metaclass=DeathPenaltyInterface):
     def handle_death_penalty(self, signum, frame):
         raise self._exception('Task exceeded maximum timeout value ({0} seconds)'.format(self._timeout))
 
@@ -58,7 +71,7 @@ class UnixSignalDeathPenalty(BaseDeathPenalty):
         signal.signal(signal.SIGALRM, signal.SIG_DFL)
 
 
-class TimerDeathPenalty(BaseDeathPenalty):
+class TimerDeathPenalty(metaclass=DeathPenaltyInterface):
     def __init__(self, timeout, exception=JobTimeoutException, **kwargs):
         super().__init__(timeout, exception, **kwargs)
         self._target_thread_id = threading.current_thread().ident

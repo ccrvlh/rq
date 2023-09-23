@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Ty
 from redis import WatchError
 
 from rq import utils
-from rq.timeouts import BaseDeathPenalty
+from rq.timeouts import DeathPenaltyInterface
 from rq.timeouts import UnixSignalDeathPenalty
 from rq.connections import resolve_connection
 from rq.defaults import DEFAULT_RESULT_TTL
@@ -72,7 +72,7 @@ class Queue:
     job_class: Type['Job'] = Job
     """The default job class to use (defaults to `rq.job.Job`)."""
 
-    death_penalty_class: Type[BaseDeathPenalty] = UnixSignalDeathPenalty
+    death_penalty_class: DeathPenaltyInterface = UnixSignalDeathPenalty
     """The default death penalty class to use (defaults to `rq.timeouts.UnixSignalDeathPenalty`)."""
 
     DEFAULT_TIMEOUT: int = 180
@@ -92,7 +92,7 @@ class Queue:
         is_async: bool = True,
         job_class: Optional[Union[str, Type['Job']]] = None,
         serializer: Any = None,
-        death_penalty_class: Optional[Type[BaseDeathPenalty]] = UnixSignalDeathPenalty,
+        death_penalty_class: Optional[DeathPenaltyInterface] = UnixSignalDeathPenalty,
         **kwargs,
     ):
         """Initializes a Queue object.
@@ -1260,7 +1260,7 @@ class Queue:
         connection: 'Redis',
         job_class: Optional[Type['Job']] = None,
         serializer: Any = None,
-        death_penalty_class: Optional[Type[BaseDeathPenalty]] = None,
+        death_penalty_class: Optional[Type[DeathPenaltyInterface]] = None,
     ) -> Optional[Tuple['Job', 'Queue']]:
         """Class method returning the job_class instance at the front of the given
         set of Queues, where the order of the queues is important.
@@ -1325,7 +1325,7 @@ class Queue:
         connection: Optional['Redis'] = None,
         job_class: Optional[Type['Job']] = None,
         serializer=None,
-        death_penalty_class: Optional[Type[BaseDeathPenalty]] = None,
+        death_penalty_class: Optional[Type[DeathPenaltyInterface]] = None,
     ) -> List['Queue']:
         """Returns an iterable of all Queues.
 
@@ -1360,7 +1360,7 @@ class Queue:
         connection: Optional['Redis'] = None,
         job_class: Optional[Type['Job']] = None,
         serializer: Any = None,
-        death_penalty_class: Optional[Type[BaseDeathPenalty]] = None,
+        death_penalty_class: Optional[Type[DeathPenaltyInterface]] = None,
     ) -> 'Queue':
         """Returns a Queue instance, based on the naming conventions for naming
         the internal Redis keys.  Can be used to reverse-lookup Queues by their

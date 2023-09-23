@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Any, Callable, List, TypeVar, Union
 
+
 if TYPE_CHECKING:
     from rq.job import Dependency, Job
 
