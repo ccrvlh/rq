@@ -642,7 +642,7 @@ class Queue:
         Returns:
             _type_: _description_
         """
-        from .registry import ScheduledJobRegistry
+        from rq.registry import ScheduledJobRegistry
 
         registry = ScheduledJobRegistry(queue=self)
 
@@ -773,7 +773,7 @@ class Queue:
             pipeline (Optional[Pipeline], optional): The Redis Pipeline. Defaults to None.
             exclude_job_id (Optional[str], optional): Whether to exclude the job id. Defaults to None.
         """
-        from .registry import DeferredJobRegistry
+        from rq.registry import DeferredJobRegistry
 
         pipe = pipeline if pipeline is not None else self.connection.pipeline()
         dependents_key = job.dependents_key

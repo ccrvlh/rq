@@ -422,15 +422,15 @@ class TestQueue(RQTestCase):
         q3 = Queue('third-queue')
 
         # Ensure a queue is added only once a job is enqueued
-        self.assertEqual(len(Queue.all()), 0)
+        self.assertEqual(len(self.rq.get_queues()), 0)
         q1.enqueue(say_hello)
-        self.assertEqual(len(Queue.all()), 1)
+        self.assertEqual(len(self.rq.get_queues()), 1)
 
         # Ensure this holds true for multiple queues
         q2.enqueue(say_hello)
         q3.enqueue(say_hello)
-        names = [q.name for q in Queue.all()]
-        self.assertEqual(len(Queue.all()), 3)
+        names = [q.name for q in self.rq.get_queues()]
+        self.assertEqual(len(self.rq.get_queues()), 3)
 
         # Verify names
         self.assertTrue('first-queue' in names)
@@ -441,8 +441,8 @@ class TestQueue(RQTestCase):
         w = ForkWorker([q2, q3])
         w.work(burst=True)
 
-        # Queue.all() should still report the empty queues
-        self.assertEqual(len(Queue.all()), 3)
+        # self.rq.get_queues() should still report the empty queues
+        self.assertEqual(len(self.rq.get_queues()), 3)
 
     def test_all_custom_job(self):
         class CustomJob(Job):
@@ -450,7 +450,7 @@ class TestQueue(RQTestCase):
 
         q = Queue('all-queue')
         q.enqueue(say_hello)
-        queues = Queue.all(job_class=CustomJob)
+        queues = self.rq.get_queues(job_class=CustomJob)
         self.assertEqual(len(queues), 1)
         self.assertIs(queues[0].job_class, CustomJob)
 

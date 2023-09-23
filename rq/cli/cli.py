@@ -30,6 +30,7 @@ from rq.exceptions import InvalidJobOperationError
 from rq.job import JobStatus
 from rq.job import Job
 from rq.logutils import blue
+from rq.main import RQ
 from rq.registry import clean_registries
 from rq.registry import FailedJobRegistry
 from rq.serializers import DefaultSerializer, SerializerInterface
@@ -120,7 +121,7 @@ def requeue(cli_config, queue, all, job_class, serializer, job_ids, **options):
 @helpers.pass_cli_config
 def info(cli_config, interval, raw, only_queues, only_workers, by_queue, queues, **options):
     """RQ command-line monitor."""
-
+    
     if only_queues:
         func = helpers.show_queues
     elif only_workers:
@@ -130,10 +131,11 @@ def info(cli_config, interval, raw, only_queues, only_workers, by_queue, queues,
 
     try:
         with Connection(cli_config.connection):
+            rq = RQ(cli_config.connection)
             if queues:
                 qs = list(map(cli_config.queue_class, queues))
             else:
-                qs = cli_config.queue_class.all()
+                qs = rq.get_queues()
 
             for queue in qs:
                 clean_registries(queue)

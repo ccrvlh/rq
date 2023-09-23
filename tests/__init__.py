@@ -6,6 +6,7 @@ import pytest
 from redis import Redis
 
 from rq import pop_connection, push_connection
+from rq.main import RQ
 
 
 def find_empty_redis_database(ssl=False):
@@ -84,6 +85,7 @@ class RQTestCase(unittest.TestCase):
     def setUp(self):
         # Flush beforewards (we like our hygiene)
         self.testconn.flushdb()
+        self.rq = RQ(connection=self.testconn)
 
     def tearDown(self):
         # Flush afterwards
