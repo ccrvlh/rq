@@ -48,4 +48,4 @@ RUN set -e && \
 
 CMD stunnel \
     & redis-server \
-    & RUN_SLOW_TESTS_TOO=1 RUN_SSL_TESTS=1 hatch run tox
+    & RUN_SSL_TESTS=1 hatch run tox

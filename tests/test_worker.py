@@ -29,7 +29,7 @@ from rq.suspension import resume, suspend
 from rq.utils import as_text, get_version, utcnow
 from rq.version import VERSION
 from rq.worker import WorkerStatus
-from tests import RQTestCase, slow
+from tests import RQTestCase
 from tests.fixtures import (
     CustomJob,
     access_self,
@@ -307,7 +307,7 @@ class TestWorker(RQTestCase):
         worker.maintain_heartbeats(job)
         self.assertFalse(self.testconn.exists(job.key))
 
-    @slow
+    @pytest.mark.slow
     def test_heartbeat_survives_lost_connection(self):
         with mock.patch.object(ForkWorker, 'heartbeat') as mocked:
             # None -> Heartbeat is first called before the job loop
@@ -329,7 +329,7 @@ class TestWorker(RQTestCase):
         job.refresh()
         self.assertIn('rq.exceptions.JobTimeoutException', job.exc_info)
 
-    @slow
+    @pytest.mark.slow
     def test_heartbeat_busy(self):
         """Periodic heartbeats while horse is busy with long jobs"""
         q = Queue()
@@ -648,7 +648,7 @@ class TestWorker(RQTestCase):
 
         self.assertEqual(q.count, 0)
 
-    @slow
+    @pytest.mark.slow
     def test_max_idle_time(self):
         q = Queue()
         w = ForkWorker([q])
@@ -673,7 +673,7 @@ class TestWorker(RQTestCase):
         self.assertIsNone(w.dequeue_job_and_maintain_ttl(2, max_idle_time=3))
         self.assertLess((utcnow() - now).total_seconds(), 5)  # 5 for some buffer
 
-    @slow  # noqa
+    @pytest.mark.slow  # noqa
     def test_timeouts(self):
         """Worker kills jobs after timeout."""
         sentinel_file = '/tmp/.rq_sentinel'
@@ -929,7 +929,7 @@ class TestWorker(RQTestCase):
         assert q.count == 0
         self.assertEqual(os.path.exists(SENTINEL_FILE), True)
 
-    @slow
+    @pytest.mark.slow
     def test_suspend_with_duration(self):
         q = Queue()
         for _ in range(5):
@@ -1318,7 +1318,7 @@ class TimeoutTestCase:
 
 
 class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
-    @slow
+    @pytest.mark.slow
     def test_idle_worker_warm_shutdown(self):
         """worker with no ongoing job receiving single SIGTERM signal and shutting down"""
         w = ForkWorker('foo')
@@ -1331,7 +1331,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         p.join(1)
         self.assertFalse(w._stop_requested)
 
-    @slow
+    @pytest.mark.slow
     def test_working_worker_warm_shutdown(self):
         """worker with an ongoing job receiving single SIGTERM signal, allowing job to finish then shutting down"""
         fooq = Queue('foo')
@@ -1353,7 +1353,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         self.assertIsNotNone(w.shutdown_requested_date)
         self.assertEqual(type(w.shutdown_requested_date).__name__, 'datetime')
 
-    @slow
+    @pytest.mark.slow
     def test_working_worker_cold_shutdown(self):
         """Busy worker shuts down immediately on double SIGTERM signal"""
         fooq = Queue('foo')
@@ -1378,7 +1378,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         self.assertIsNotNone(shutdown_requested_date)
         self.assertEqual(type(shutdown_requested_date).__name__, 'datetime')
 
-    @slow
+    @pytest.mark.slow
     def test_work_horse_death_sets_job_failed(self):
         """worker with an ongoing job whose work horse dies unexpectadly (before
         completing the job) should set the job's status to FAILED
@@ -1402,7 +1402,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         self.assertTrue(job in failed_job_registry)
         self.assertEqual(fooq.count, 0)
 
-    @slow
+    @pytest.mark.slow
     @unittest.skip('Very slow')
     def test_work_horse_force_death(self):
         """Simulate a frozen worker that doesn't observe the timeout properly.

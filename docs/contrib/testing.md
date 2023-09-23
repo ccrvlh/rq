@@ -24,20 +24,19 @@ pytest .
 It should automatically pickup the `tests` directory and run the test suite.
 Bear in mind that some tests may be be skipped in your local environment - make sure to look at which tests are being skipped.
 
-
 ### Skipped Tests
 
 Apart from skipped tests related to the interpreter (eg. `PyPy`) or operational systems, slow tests are also skipped by default, but are ran in the GitHub CI/CD workflow.
-To include slow tests in your local environment, use the `RUN_SLOW_TESTS_TOO=1` environment variable:
+To include slow tests in your local environment add the `--include-slow` flag to `pytest`:
 
 ```sh
-RUN_SLOW_TESTS_TOO=1 pytest .
+pytest . --include-slow
 ```
 
 If you want to analyze the coverage reports, you can use the `--cov` argument to `pytest`. By adding `--cov-report`, you also have some flexibility in terms of the report output format:
 
 ```sh
-RUN_SLOW_TESTS_TOO=1 pytest --cov=rq --cov-config=.coveragerc --cov-report={{report_format}} --durations=5
+pytest --cov=rq --cov-config=.coveragerc --cov-report={{report_format}} --include-slow --durations=5
 ```
 
 Where you replace the `report_format` by the desired format (`term` / `html` / `xml`).

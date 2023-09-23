@@ -9,7 +9,7 @@ from multiprocessing import Process
 from unittest import mock, skipIf
 
 from rq.contrib.heroku import HerokuWorker
-from tests import RQTestCase, slow
+from tests import RQTestCase
 from tests.fixtures import (
     create_file_after_timeout_and_setsid,
     run_dummy_heroku_worker
@@ -29,7 +29,7 @@ class HerokuWorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
     def tearDown(self):
         shutil.rmtree(self.sandbox, ignore_errors=True)
 
-    @slow
+    @pytest.mark.slow
     def test_immediate_shutdown(self):
         """Heroku work horse shutdown with immediate (0 second) kill"""
         p = Process(target=run_dummy_heroku_worker, args=(self.sandbox, 0))
@@ -43,7 +43,7 @@ class HerokuWorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         self.assertTrue(os.path.exists(os.path.join(self.sandbox, 'started')))
         self.assertFalse(os.path.exists(os.path.join(self.sandbox, 'finished')))
 
-    @slow
+    @pytest.mark.slow
     def test_1_sec_shutdown(self):
         """Heroku work horse shutdown with 1 second kill"""
         p = Process(target=run_dummy_heroku_worker, args=(self.sandbox, 1))
@@ -59,7 +59,7 @@ class HerokuWorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         self.assertTrue(os.path.exists(os.path.join(self.sandbox, 'started')))
         self.assertFalse(os.path.exists(os.path.join(self.sandbox, 'finished')))
 
-    @slow
+    @pytest.mark.slow
     def test_shutdown_double_sigrtmin(self):
         """Heroku work horse shutdown with long delay but SIGRTMIN sent twice"""
         p = Process(target=run_dummy_heroku_worker, args=(self.sandbox, 10))
