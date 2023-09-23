@@ -52,7 +52,6 @@ class WorkerPool:
         self._workers: List[ForkWorker] = []
         setup_loghandlers('INFO', DEFAULT_LOGGING_DATE_FORMAT, DEFAULT_LOGGING_FORMAT, name=__name__)
         self.log: logging.Logger = logging.getLogger(__name__)
-        # self.log: logging.Logger = logger
         self._queue_names: List[str] = utils.parse_names(queues)
         self.connection = connection
         self.name: str = uuid4().hex
