@@ -14,7 +14,7 @@ from multiprocessing import Process
 from redis import Redis
 
 from rq import Connection, Queue, get_current_connection, get_current_job
-from rq.command import send_kill_horse_command, send_shutdown_command
+from rq.commands import send_kill_horse_command, send_shutdown_command
 from rq.decorators import job
 from rq.job import Job
 from rq.contrib.heroku import HerokuWorker

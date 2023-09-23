@@ -30,9 +30,9 @@ from redis import Redis
 from contextlib import suppress
 from concurrent.futures import ThreadPoolExecutor
 
-from rq.command import handle_command
-from rq.command import parse_payload
-from rq.command import PUBSUB_CHANNEL_TEMPLATE
+from rq.commands import handle_command
+from rq.commands import parse_payload
+from rq.commands import PUBSUB_CHANNEL_TEMPLATE
 from rq.connections import get_current_connection
 from rq.connections import pop_connection
 from rq.connections import push_connection

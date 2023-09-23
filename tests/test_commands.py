@@ -4,7 +4,7 @@ from multiprocessing import Process
 from redis import Redis
 
 from rq import Queue, ForkWorker
-from rq.command import send_command, send_kill_horse_command, send_shutdown_command, send_stop_job_command
+from rq.commands import send_command, send_kill_horse_command, send_shutdown_command, send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
 from rq.serializers import JSONSerializer
 from rq.worker import WorkerStatus
