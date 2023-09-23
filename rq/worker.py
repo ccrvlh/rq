@@ -1464,7 +1464,7 @@ class BaseWorker:
             list_keys (List[str]): A list of worker keys
         """
         warnings.warn(
-            "V2 Deprecation Warning: The `all_keys()` method for the Worker class is deprecated. Use the main RQ class to query for all workers' keys instead.",
+            "V2 Deprecation Warning: The `all_keys()` method for the Worker class is deprecated. Use the main RQ class to query for all workers' keys with `get_workers_keys` instead.",
             DeprecationWarning,
         )
         return [utils.as_text(key) for key in BaseWorker.get_keys(queue=queue, connection=connection)]
