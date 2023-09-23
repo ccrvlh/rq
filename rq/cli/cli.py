@@ -31,8 +31,8 @@ from rq.job import JobStatus
 from rq.job import Job
 from rq.logutils import blue
 from rq.main import RQ
-from rq.registry import clean_registries
-from rq.registry import FailedJobRegistry
+from rq.registries import clean_registries
+from rq.registries import FailedJobRegistry
 from rq.serializers import DefaultSerializer, SerializerInterface
 from rq.suspension import is_suspended
 from rq.suspension import resume as connection_resume

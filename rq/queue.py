@@ -176,21 +176,21 @@ class Queue:
     @property
     def failed_job_registry(self):
         """Returns this queue's FailedJobRegistry."""
-        from rq.registry import FailedJobRegistry
+        from rq.registries import FailedJobRegistry
 
         return FailedJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
     @property
     def started_job_registry(self):
         """Returns this queue's StartedJobRegistry."""
-        from rq.registry import StartedJobRegistry
+        from rq.registries import StartedJobRegistry
 
         return StartedJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
     @property
     def finished_job_registry(self):
         """Returns this queue's FinishedJobRegistry."""
-        from rq.registry import FinishedJobRegistry
+        from rq.registries import FinishedJobRegistry
 
         # TODO: Why was job_class only ommited here before?  Was it intentional?
         return FinishedJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
@@ -198,21 +198,21 @@ class Queue:
     @property
     def deferred_job_registry(self):
         """Returns this queue's DeferredJobRegistry."""
-        from rq.registry import DeferredJobRegistry
+        from rq.registries import DeferredJobRegistry
 
         return DeferredJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
     @property
     def scheduled_job_registry(self):
         """Returns this queue's ScheduledJobRegistry."""
-        from rq.registry import ScheduledJobRegistry
+        from rq.registries import ScheduledJobRegistry
 
         return ScheduledJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
     @property
     def canceled_job_registry(self):
         """Returns this queue's CanceledJobRegistry."""
-        from rq.registry import CanceledJobRegistry
+        from rq.registries import CanceledJobRegistry
 
         return CanceledJobRegistry(queue=self, job_class=self.job_class, serializer=self.serializer)
 
@@ -642,7 +642,7 @@ class Queue:
         Returns:
             _type_: _description_
         """
-        from rq.registry import ScheduledJobRegistry
+        from rq.registries import ScheduledJobRegistry
 
         registry = ScheduledJobRegistry(queue=self)
 
@@ -773,7 +773,7 @@ class Queue:
             pipeline (Optional[Pipeline], optional): The Redis Pipeline. Defaults to None.
             exclude_job_id (Optional[str], optional): Whether to exclude the job id. Defaults to None.
         """
-        from rq.registry import DeferredJobRegistry
+        from rq.registries import DeferredJobRegistry
 
         pipe = pipeline if pipeline is not None else self.connection.pipeline()
         dependents_key = job.dependents_key

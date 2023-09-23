@@ -1,7 +1,7 @@
 import time
 
 from rq import Queue, Worker
-from rq.registry import FailedJobRegistry, FinishedJobRegistry
+from rq.registries import FailedJobRegistry, FinishedJobRegistry
 from rq.timeouts import TimerDeathPenalty
 from tests import RQTestCase
 

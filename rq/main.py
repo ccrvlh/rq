@@ -4,7 +4,7 @@ from logging import getLogger
 from typing import Any, List, Optional, Type, TypeVar, Union
 from redis import Redis
 
-from rq import registry
+from rq import registries
 from rq import utils
 from rq.connections import resolve_connection
 from rq.job import Job
@@ -448,7 +448,7 @@ class RQ:
         Returns:
             List[str]: A list of deferred job ids
         """
-        job_ids = self._get_job_ids_from_registry(registry.DeferredJobRegistry, queue, offset, limit)
+        job_ids = self._get_job_ids_from_registry(registries.DeferredJobRegistry, queue, offset, limit)
         return job_ids
 
     def get_scheduled_jobs(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[str]:
@@ -462,7 +462,7 @@ class RQ:
         Returns:
             List[str]: A list of deferred job ids
         """
-        job_ids = self._get_job_ids_from_registry(registry.ScheduledJobRegistry, queue, offset, limit)
+        job_ids = self._get_job_ids_from_registry(registries.ScheduledJobRegistry, queue, offset, limit)
         return job_ids
 
     def get_started_jobs(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[str]:
@@ -476,7 +476,7 @@ class RQ:
         Returns:
             List[str]: A list of deferred job ids
         """
-        job_ids = self._get_job_ids_from_registry(registry.StartedJobRegistry, queue, offset, limit)
+        job_ids = self._get_job_ids_from_registry(registries.StartedJobRegistry, queue, offset, limit)
         return job_ids
 
     def get_failed_jobs(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[str]:
@@ -490,7 +490,7 @@ class RQ:
         Returns:
             List[str]: A list of deferred job ids
         """
-        job_ids = self._get_job_ids_from_registry(registry.FailedJobRegistry, queue, offset, limit)
+        job_ids = self._get_job_ids_from_registry(registries.FailedJobRegistry, queue, offset, limit)
         return job_ids
 
     def get_finished_jobs(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[str]:
@@ -504,7 +504,7 @@ class RQ:
         Returns:
             List[str]: A list of deferred job ids
         """
-        job_ids = self._get_job_ids_from_registry(registry.FinishedJobRegistry, queue, offset, limit)
+        job_ids = self._get_job_ids_from_registry(registries.FinishedJobRegistry, queue, offset, limit)
         return job_ids
 
     def job_exists(self, job_id: str) -> bool:
@@ -580,7 +580,7 @@ class RQ:
         return _worker
 
     def _get_job_ids_from_registry(
-        self, registry: Type[registry.BaseRegistry], queue: QueueReference, offset: int = 0, limit: int = -1
+        self, registry: Type[registries.BaseRegistry], queue: QueueReference, offset: int = 0, limit: int = -1
     ) -> List[str]:
         """Get's a list of the Jobs IDs from a given registry.
         This is an internal shortcut to be used by many registries types.

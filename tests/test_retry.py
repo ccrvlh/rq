@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from rq.job import Job, JobStatus, Retry
 from rq.queue import Queue
-from rq.registry import FailedJobRegistry, StartedJobRegistry
+from rq.registries import FailedJobRegistry, StartedJobRegistry
 from rq.worker import ForkWorker
 from tests import RQTestCase, fixtures
 from tests.fixtures import div_by_zero, say_hello

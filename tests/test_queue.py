@@ -7,7 +7,7 @@ from redis import Redis
 
 from rq import Queue, Retry
 from rq.job import Job, JobStatus
-from rq.registry import (
+from rq.registries import (
     CanceledJobRegistry,
     DeferredJobRegistry,
     FailedJobRegistry,

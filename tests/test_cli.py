@@ -22,8 +22,8 @@ from rq.cli.helpers import parse_schedule
 from rq.cli.helpers import read_config_file
 from rq.job import Job
 from rq.job import JobStatus
-from rq.registry import FailedJobRegistry
-from rq.registry import ScheduledJobRegistry
+from rq.registries import FailedJobRegistry
+from rq.registries import ScheduledJobRegistry
 from rq.scheduler import Scheduler
 from rq.serializers import JSONSerializer
 from rq.timeouts import UnixSignalDeathPenalty

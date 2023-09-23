@@ -20,7 +20,7 @@ from rq.defaults import DEFAULT_SCHEDULER_FALLBACK_PERIOD
 from rq.defaults import SCHEDULER_LOCKING_KEY_TEMPLATE
 from rq.const import SchedulerStatus
 from rq.logutils import setup_loghandlers
-from rq.registry import ScheduledJobRegistry
+from rq.registries import ScheduledJobRegistry
 from rq.serializers import resolve_serializer
 
 

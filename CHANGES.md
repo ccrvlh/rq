@@ -23,6 +23,7 @@
 - Replace Worker's `find_by_key` with `load_by_key`
 - Replace Worker's `all_keys` with `get_workers_keys` on `RQ` main class
 - Replace Workers's `count` with `get_workers_count` on `RQ` main class
+- RENAME: `registry.py` -> `registries.py`
 
 ### RQ 1.15.1 (2023-06-20)
 

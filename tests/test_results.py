@@ -11,7 +11,7 @@ from rq.const import ResultType
 from rq.defaults import UNSERIALIZABLE_RETURN_VALUE_PAYLOAD
 from rq.job import Job
 from rq.queue import Queue
-from rq.registry import StartedJobRegistry
+from rq.registries import StartedJobRegistry
 from rq.results import Result
 from rq.utils import get_version, utcnow
 from rq.worker import ForkWorker

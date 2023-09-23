@@ -60,8 +60,8 @@ from rq.job import Job
 from rq.job import JobStatus
 from rq.queue import Queue
 from rq.logutils import blue, green, setup_loghandlers, yellow
-from rq.registry import clean_registries
-from rq.registry import StartedJobRegistry
+from rq.registries import clean_registries
+from rq.registries import StartedJobRegistry
 from rq.scheduler import Scheduler
 from rq.serializers import resolve_serializer
 from rq.suspension import is_suspended

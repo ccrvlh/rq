@@ -16,7 +16,7 @@ from rq.exceptions import InvalidJobOperation
 from rq.exceptions import NoSuchJobError
 from rq.job import Callback, Dependency, Job, JobStatus, cancel_job, get_current_job
 from rq.queue import Queue
-from rq.registry import (
+from rq.registries import (
     CanceledJobRegistry,
     DeferredJobRegistry,
     FailedJobRegistry,

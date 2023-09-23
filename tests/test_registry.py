@@ -6,7 +6,7 @@ from rq.defaults import DEFAULT_FAILURE_TTL
 from rq.exceptions import AbandonedJobError, InvalidJobOperation
 from rq.job import Job, JobStatus, requeue_job
 from rq.queue import Queue
-from rq.registry import (
+from rq.registries import (
     CanceledJobRegistry,
     DeferredJobRegistry,
     FailedJobRegistry,

@@ -389,7 +389,7 @@ class Job:
 
     @property
     def started_job_registry(self):
-        from rq.registry import StartedJobRegistry
+        from rq.registries import StartedJobRegistry
 
         return StartedJobRegistry(
             self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -397,7 +397,7 @@ class Job:
 
     @property
     def failed_job_registry(self):
-        from rq.registry import FailedJobRegistry
+        from rq.registries import FailedJobRegistry
 
         return FailedJobRegistry(
             self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -405,7 +405,7 @@ class Job:
 
     @property
     def finished_job_registry(self):
-        from rq.registry import FinishedJobRegistry
+        from rq.registries import FinishedJobRegistry
 
         return FinishedJobRegistry(
             self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -612,7 +612,7 @@ class Job:
         Args:
             pipeline (Optional[Pipeline]): The Redis' pipeline. Defaults to None
         """
-        from rq.registry import DeferredJobRegistry
+        from rq.registries import DeferredJobRegistry
 
         registry = DeferredJobRegistry(
             self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -780,7 +780,7 @@ class Job:
         if self.is_canceled:
             raise InvalidJobOperation("Cannot cancel already canceled job: {}".format(self.get_id()))
         from rq.queue import Queue
-        from rq.registry import CanceledJobRegistry
+        from rq.registries import CanceledJobRegistry
 
         pipe = pipeline or self.connection.pipeline()
 
@@ -923,7 +923,7 @@ class Job:
         return Result.fetch_latest(self, serializer=self.serializer, timeout=timeout)
 
     def _remove_from_registries(self, pipeline: Optional['Pipeline'] = None, remove_from_queue: bool = True):
-        from rq.registry import BaseRegistry
+        from rq.registries import BaseRegistry
 
         if remove_from_queue:
             from rq.queue import Queue
@@ -932,7 +932,7 @@ class Job:
             q.remove(self, pipeline=pipeline)
         registry: BaseRegistry
         if self.is_finished:
-            from rq.registry import FinishedJobRegistry
+            from rq.registries import FinishedJobRegistry
 
             registry = FinishedJobRegistry(
                 self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -940,7 +940,7 @@ class Job:
             registry.remove(self, pipeline=pipeline)
 
         elif self.is_deferred:
-            from rq.registry import DeferredJobRegistry
+            from rq.registries import DeferredJobRegistry
 
             registry = DeferredJobRegistry(
                 self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -948,7 +948,7 @@ class Job:
             registry.remove(self, pipeline=pipeline)
 
         elif self.is_started:
-            from rq.registry import StartedJobRegistry
+            from rq.registries import StartedJobRegistry
 
             registry = StartedJobRegistry(
                 self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -956,7 +956,7 @@ class Job:
             registry.remove(self, pipeline=pipeline)
 
         elif self.is_scheduled:
-            from rq.registry import ScheduledJobRegistry
+            from rq.registries import ScheduledJobRegistry
 
             registry = ScheduledJobRegistry(
                 self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer
@@ -967,7 +967,7 @@ class Job:
             self.failed_job_registry.remove(self, pipeline=pipeline)
 
         elif self.is_canceled:
-            from rq.registry import CanceledJobRegistry
+            from rq.registries import CanceledJobRegistry
 
             registry = CanceledJobRegistry(
                 self.origin, connection=self.connection, job_class=self.__class__, serializer=self.serializer

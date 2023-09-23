@@ -9,7 +9,7 @@ from rq import Queue
 from rq.defaults import DEFAULT_MAINTENANCE_TASK_INTERVAL
 from rq.exceptions import NoSuchJobError
 from rq.job import Job, Retry
-from rq.registry import FinishedJobRegistry, ScheduledJobRegistry
+from rq.registries import FinishedJobRegistry, ScheduledJobRegistry
 from rq.scheduler import Scheduler
 from rq.serializers import JSONSerializer
 from rq.utils import current_timestamp

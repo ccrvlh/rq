@@ -22,7 +22,7 @@ from rq import Queue, Worker, ForkWorker, get_current_connection
 from rq.const import ResultType
 from rq.defaults import DEFAULT_MAINTENANCE_TASK_INTERVAL
 from rq.job import Job, JobStatus, Retry
-from rq.registry import FailedJobRegistry, FinishedJobRegistry, StartedJobRegistry
+from rq.registries import FailedJobRegistry, FinishedJobRegistry, StartedJobRegistry
 from rq.results import Result
 from rq.serializers import JSONSerializer
 from rq.suspension import resume, suspend
