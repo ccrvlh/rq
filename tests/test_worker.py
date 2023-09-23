@@ -32,6 +32,7 @@ from rq.worker import WorkerStatus
 from tests import RQTestCase
 from tests.fixtures import (
     CustomJob,
+    CustomQueue,
     access_self,
     create_file,
     create_file_after_timeout,
@@ -48,9 +49,6 @@ from tests.fixtures import (
     say_pid,
 )
 
-
-class CustomQueue(Queue):
-    pass
 
 
 class TestWorker(RQTestCase):
@@ -124,9 +122,9 @@ class TestWorker(RQTestCase):
         w2 = ForkWorker([foo_queue], name='w2')
         w2.register_birth()
 
-        self.assertEqual(set(ForkWorker.all(connection=foo_queue.connection)), set([w1, w2]))
-        self.assertEqual(set(ForkWorker.all(queue=foo_queue)), set([w1, w2]))
-        self.assertEqual(set(ForkWorker.all(queue=bar_queue)), set([w1]))
+        self.assertEqual(set(self.rq.get_workers(connection=foo_queue.connection)), set([w1, w2]))
+        self.assertEqual(set(self.rq.get_workers(queue=foo_queue)), set([w1, w2]))
+        self.assertEqual(set(self.rq.get_workers(queue=bar_queue)), set([w1]))
 
         w1.register_death()
         w2.register_death()
