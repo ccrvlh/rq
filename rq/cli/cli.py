@@ -26,7 +26,6 @@ from rq.defaults import (
     DEFAULT_RESULT_TTL,
     DEFAULT_WORKER_TTL,
 )
-from rq.contrib.legacy import cleanup_ghosts
 from rq.exceptions import InvalidJobOperationError
 from rq.job import JobStatus
 from rq.job import Job
@@ -241,7 +240,6 @@ def worker(
     helpers.setup_loghandlers_from_args(verbose, quiet, date_format, log_format)
 
     try:
-        cleanup_ghosts(cli_config.connection)
         exception_handlers = []
         for h in exception_handler:
             exception_handlers.append(utils.import_attribute(h))

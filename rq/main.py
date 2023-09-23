@@ -275,6 +275,34 @@ class RQ:
         worker.refresh()
         return worker
 
+    def get_all_workers(
+        self,
+        connection: Optional['Redis'] = None,
+        job_class: Optional[Type['Job']] = None,
+        queue_class: Optional[Type['Queue']] = None,
+        queue: Optional['Queue'] = None,
+        serializer=None,
+    ):
+        """Returns an iterable of all Workers.
+
+        Returns:
+            workers (List[Worker]): A list of workers
+        """
+        # if queue:
+        #     connection = queue.connection
+        # elif connection is None:
+        #     connection = get_current_connection()
+
+        # worker_keys = BaseWorker.get_keys(queue=queue, connection=connection)
+        # workers = [
+        #     cls.find_by_key(
+        #         key, connection=connection, job_class=job_class, queue_class=queue_class, serializer=serializer
+        #     )
+        #     for key in worker_keys
+        # ]
+        # return utils.compact(workers)
+        pass
+
     def get_current_job(self, worker: WorkerReference) -> Optional[Job]:
         """Gets the current job being executed by a worker
 
