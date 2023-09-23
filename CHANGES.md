@@ -13,6 +13,11 @@
   - TODO: Current Job
 - Reorganize `Job` & `Results`
 - Drop Redis <= 5.0 support
+- Remove deprecated `state` property in the Worker
+- Remove `legacy` kill ghost workers
+- Refactor Worker queue validation/parsing
+- Refactor `prepare_for_work` logic
+- Add `unkown` and `starting` WorkerStatus
 
 ### RQ 1.15.1 (2023-06-20)
 

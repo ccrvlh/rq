@@ -1,4 +1,3 @@
-
 from enum import Enum
 
 
@@ -9,11 +8,12 @@ class DequeueStrategy(str, Enum):
 
 
 class WorkerStatus(str, Enum):
+    UNKNOWN = 'unknown'
+    STARTING = 'starting'
     STARTED = 'started'
     SUSPENDED = 'suspended'
     BUSY = 'busy'
     IDLE = 'idle'
-
 
 
 class SchedulerStatus(str, Enum):
@@ -33,6 +33,7 @@ class JobStatus(str, Enum):
     SCHEDULED = 'scheduled'
     STOPPED = 'stopped'
     CANCELED = 'canceled'
+
 
 class ResultType(Enum):
     SUCCESSFUL = 1

@@ -101,7 +101,7 @@ class BaseWorker:
 
     death_penalty_class = UnixSignalDeathPenalty
     """ The default death penalty class. """
-    
+
     queue_class = Queue
     """The Queue class associated with this worker."""
 
@@ -115,7 +115,7 @@ class BaseWorker:
 
     log_job_description = True
     """ factor to increase connection_wait_time in case of continuous connection failures."""
-    
+
     exponential_backoff_factor = 2.0
     """ Max Wait time (in seconds) after which exponential_backoff_factor won't be applicable."""
 
@@ -154,28 +154,13 @@ class BaseWorker:
         self.version = VERSION
         self.python_version = sys.version
         self.serializer = resolve_serializer(serializer)
-
-        queues = [
-            self.queue_class(
-                name=q,
-                connection=connection,
-                job_class=self.job_class,
-                serializer=self.serializer,
-                death_penalty_class=self.death_penalty_class,
-            )
-            if isinstance(q, str)
-            else q
-            for q in utils.ensure_list(queues)
-        ]
-
         self.name: str = name or uuid4().hex
-        self.queues = queues
-        self.validate_queues()
+        self.queues = self._parse_queues(queues)
         self._ordered_queues = self.queues[:]
         self._exc_handlers: List[Callable] = []
         self._shutdown_requested_date: Optional[datetime] = None
 
-        self._state: str = 'starting'
+        self._state: 'WorkerStatus' = WorkerStatus.STARTING
         self._stop_requested: bool = False
         self._stopped_job_id = None
 
@@ -191,28 +176,11 @@ class BaseWorker:
         self.pubsub: Optional['PubSub'] = None
         self.pubsub_thread = None
         self._dequeue_strategy: DequeueStrategy = DequeueStrategy.DEFAULT
-
         self.disable_default_exception_handler = disable_default_exception_handler
-
-        if prepare_for_work:
-            self.hostname: Optional[str] = socket.gethostname()
-            self.pid: Optional[int] = os.getpid()
-            try:
-                connection.client_setname(self.name)
-            except redis.exceptions.ResponseError:
-                warnings.warn('CLIENT SETNAME command not supported, setting ip_address to unknown', Warning)
-                self.ip_address = 'unknown'
-            else:
-                client_adresses = [client['addr'] for client in connection.client_list() if client['name'] == self.name]
-                if len(client_adresses) > 0:
-                    self.ip_address = client_adresses[0]
-                else:
-                    warnings.warn('CLIENT LIST command not supported, setting ip_address to unknown', Warning)
-                    self.ip_address = 'unknown'
-        else:
-            self.hostname = None
-            self.pid = None
-            self.ip_address = 'unknown'
+        self.hostname: Optional[str] = None
+        self.pid: Optional[int] = None
+        self.ip_address: str = 'unknown'
+        self._set_host_details(prepare_for_work=prepare_for_work)
 
         if isinstance(exception_handlers, (list, tuple)):
             for handler in exception_handlers:
@@ -268,6 +236,52 @@ class BaseWorker:
 
     # Getters / Setters
 
+    def _parse_queues(self, queues: Union[str, List[str]]) -> List['Queue']:
+        queues_lists = [
+            self.queue_class(
+                name=q,
+                connection=self.connection,
+                job_class=self.job_class,
+                serializer=self.serializer,
+                death_penalty_class=self.death_penalty_class,
+            )
+            if isinstance(q, str)
+            else q
+            for q in utils.ensure_list(queues)
+        ]
+        for queue in queues_lists:
+            if not isinstance(queue, self.queue_class):
+                raise TypeError('{0} is not of type {1} or string types'.format(queue, self.queue_class))
+        return queues_lists
+
+    def _set_host_details(self, prepare_for_work: bool = False):
+        """Sets specific host and process information.
+
+        Args:
+            should_prepare (bool, optional): Whether to prepare for work. Defaults to False.
+        """
+        if not prepare_for_work:
+            return
+
+        self.hostname = socket.gethostname()
+        self.pid = os.getpid()
+
+        try:
+            self.connection.client_setname(self.name)
+        except redis.exceptions.ResponseError:
+            warnings.warn('CLIENT SETNAME command not supported, setting ip_address to unknown', Warning)
+            return
+        
+        try:
+            client_list = self.connection.client_list()
+        except redis.exceptions.ResponseError:
+            warnings.warn('CLIENT LIST command not supported, setting ip_address to unknown', Warning)
+            return
+        
+        client_adresses = [client['addr'] for client in client_list if client['name'] == self.name]
+        if len(client_adresses) > 0:
+            self.ip_address = client_adresses[0]
+
     def set_current_job_working_time(self, current_job_working_time: float, pipeline: Optional['Pipeline'] = None):
         """Sets the current job working time in seconds
 
@@ -319,29 +333,17 @@ class BaseWorker:
             return None
         return self.job_class.fetch(job_id, self.connection, self.serializer)
 
-    def set_state(self, state: str, pipeline: Optional['Pipeline'] = None):
+    def set_state(self, state: 'WorkerStatus'):
         """Sets the worker's state.
 
         Args:
             state (str): The state
-            pipeline (Optional[Pipeline], optional): The pipeline to use. Defaults to None.
         """
         self._state = state
-        connection = pipeline if pipeline is not None else self.connection
-        connection.hset(self.key, 'state', state)
+        self.connection.hset(self.key, 'state', state)
 
-    def _set_state(self, state):
-        """Raise a DeprecationWarning if ``worker.state = X`` is used"""
-        warnings.warn("worker.state is deprecated, use worker.set_state() instead.", DeprecationWarning)
-        self.set_state(state)
-
-    def get_state(self) -> str:
+    def get_state(self) -> 'WorkerStatus':
         return self._state
-
-    def _get_state(self):
-        """Raise a DeprecationWarning if ``worker.state == X`` is used"""
-        warnings.warn("worker.state is deprecated, use worker.get_state() instead.", DeprecationWarning)
-        return self.get_state()
 
     def _set_connection(self, connection: Optional['Redis']) -> 'Redis':
         """Configures the Redis connection to have a socket timeout.
@@ -399,8 +401,6 @@ class BaseWorker:
                 self.scheduler.release_locks()
             else:
                 self.scheduler.start()
-    
-    state = property(_get_state, _set_state)
 
     # Housekeeping
 
@@ -504,7 +504,7 @@ class BaseWorker:
         """Registers its own death."""
         self.log.debug('Registering death')
         with self.connection.pipeline() as p:
-            # We cannot use self.state = 'dead' here, because that would
+            # We cannot use self.get_state() = 'dead' here, because that would
             # rollback the pipeline
             BaseWorker.unregister(self, p)
             p.hset(self.key, 'death', utils.utcformat(utils.utcnow()))
@@ -571,7 +571,13 @@ class BaseWorker:
         self.pid = int(pid) if pid else None
         self.version = utils.as_text(version) if version else None
         self.python_version = utils.as_text(python_version) if python_version else None
-        self._state = utils.as_text(state or '?')
+
+        try:
+            _state = WorkerStatus(utils.as_text(state)).value
+        except ValueError:
+            _state = WorkerStatus.UNKNOWN
+
+        self._state = _state
         self._job_id = job_id or None
         if last_heartbeat:
             self.last_heartbeat = utils.utcparse(utils.as_text(last_heartbeat))
@@ -616,12 +622,6 @@ class BaseWorker:
         if not self.redis_server_version:
             self.redis_server_version = utils.get_version(self.connection)
         return self.redis_server_version
-
-    def validate_queues(self):
-        """Sanity check for the given queues."""
-        for queue in self.queues:
-            if not isinstance(queue, self.queue_class):
-                raise TypeError('{0} is not of type {1} or string types'.format(queue, self.queue_class))
 
     def queue_names(self) -> List[str]:
         """Returns the queue names of this worker's queues.

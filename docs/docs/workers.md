@@ -437,7 +437,7 @@ redis = Redis()
 
 workers = Worker.all(redis)
 for worker in workers:
-   if worker.state == WorkerStatus.BUSY:
+   if worker.get_state() == WorkerStatus.BUSY:
       send_kill_horse_command(redis, worker.name)
 ```
 
