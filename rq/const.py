@@ -39,3 +39,14 @@ class ResultType(Enum):
     SUCCESSFUL = 1
     FAILED = 2
     STOPPED = 3
+
+
+class WorkerType(str, Enum):
+    """The type of worker to use."""
+
+    DEFAULT = 'default'
+    FORK = 'fork'
+    THREAD = 'thread'
+    ASYNC = 'async'
+    GEVENT = 'gevent'
+    PROCESS = 'process'
