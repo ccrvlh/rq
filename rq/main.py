@@ -188,7 +188,7 @@ class RQ:
         is_async: bool = True,
         job_class: Optional[Union[str, Type['Job']]] = None,
         serializer: Any = None,
-        death_penalty_class: Optional[DeathPenaltyInterface] = UnixSignalDeathPenalty,
+        death_penalty_class: type[DeathPenaltyInterface] = UnixSignalDeathPenalty,
         **kwargs
     ) -> Queue:
         return Queue(

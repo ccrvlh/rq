@@ -101,7 +101,7 @@ class Worker:
     redis_workers_keys = REDIS_WORKER_KEYS
     """ The Redis key namespace used for all keys set by RQ for a worker. """
 
-    death_penalty_class: DeathPenaltyInterface = UnixSignalDeathPenalty
+    death_penalty_class: type[DeathPenaltyInterface] = UnixSignalDeathPenalty
     """ The default death penalty class. """
 
     queue_class = Queue

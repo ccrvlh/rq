@@ -9,7 +9,7 @@ from rq.exceptions import BaseTimeoutException
 from rq.exceptions import JobTimeoutException
 
 
-class DeathPenaltyInterface():
+class DeathPenaltyInterface(ABCMeta):
     """Base class to setup job timeouts."""
 
     def __init__(self, timeout, exception=BaseTimeoutException, **kwargs):

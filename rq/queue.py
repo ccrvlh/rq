@@ -72,7 +72,7 @@ class Queue:
     job_class: Type['Job'] = Job
     """The default job class to use (defaults to `rq.job.Job`)."""
 
-    death_penalty_class: DeathPenaltyInterface = UnixSignalDeathPenalty
+    death_penalty_class: type[DeathPenaltyInterface] = UnixSignalDeathPenalty
     """The default death penalty class to use (defaults to `rq.timeouts.UnixSignalDeathPenalty`)."""
 
     DEFAULT_TIMEOUT: int = 180
@@ -92,7 +92,7 @@ class Queue:
         is_async: bool = True,
         job_class: Optional[Union[str, Type['Job']]] = None,
         serializer: Any = None,
-        death_penalty_class: Optional[DeathPenaltyInterface] = UnixSignalDeathPenalty,
+        death_penalty_class: type[DeathPenaltyInterface] = UnixSignalDeathPenalty,
         **kwargs,
     ):
         """Initializes a Queue object.
