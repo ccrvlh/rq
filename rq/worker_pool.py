@@ -13,11 +13,11 @@ from redis import Redis
 from redis import ConnectionPool
 
 from rq import utils
-from rq.serializers import SerializerInterface
-from rq.serializers import DefaultSerializer
+from rq.serializers import DefaultSerializer, SerializerProtocol
 from rq.connections import parse_connection
 from rq.defaults import DEFAULT_LOGGING_DATE_FORMAT
 from rq.defaults import DEFAULT_LOGGING_FORMAT
+from rq.defaults import DEFAULT_SERIALIZER_CLASS
 from rq.job import Job
 from rq.logutils import setup_loghandlers
 from rq.queue import Queue
@@ -43,7 +43,7 @@ class WorkerPool:
         connection: Redis,
         num_workers: int = 1,
         worker_class: Type[Worker] = ForkWorker,
-        serializer: Type[SerializerInterface] = DefaultSerializer,
+        serializer: Type[SerializerProtocol] = DefaultSerializer,
         job_class: Type[Job] = Job,
         *args,
         **kwargs,
@@ -59,7 +59,7 @@ class WorkerPool:
         self._sleep: int = 0
         self.status: self.Status = self.Status.IDLE  # type: ignore
         self.worker_class: Type[Worker] = worker_class
-        self.serializer: Type[SerializerInterface] = serializer
+        self.serializer: Type[SerializerProtocol] = serializer
         self.job_class: Type[Job] = job_class
 
         # A dictionary of WorkerData keyed by worker name
@@ -236,7 +236,7 @@ def run_worker(
     connection_pool_class,
     connection_pool_kwargs: dict,
     worker_class: Type[Worker] = ForkWorker,
-    serializer: Type[DefaultSerializer] = DefaultSerializer,
+    serializer: Type[SerializerProtocol] = DefaultSerializer,
     job_class: Type[Job] = Job,
     burst: bool = True,
     logging_level: str = "INFO",

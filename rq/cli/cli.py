@@ -33,7 +33,8 @@ from rq.logutils import blue
 from rq.main import RQ
 from rq.registries import clean_job_registries
 from rq.registries import FailedJobRegistry
-from rq.serializers import DefaultSerializer, SerializerInterface
+from rq.serializers import SerializerProtocol
+from rq.serializers import DefaultSerializer
 from rq.suspension import is_suspended
 from rq.suspension import resume as connection_resume
 from rq.suspension import suspend as connection_suspend
@@ -470,7 +471,7 @@ def worker_pool(
     helpers.setup_loghandlers_from_args(verbose, quiet, date_format, log_format)
 
     if serializer:
-        serializer_class: Type[SerializerInterface] = utils.import_attribute(serializer)
+        serializer_class: Type[SerializerProtocol] = utils.import_attribute(serializer)
     else:
         serializer_class = DefaultSerializer
 

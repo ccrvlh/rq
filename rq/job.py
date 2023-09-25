@@ -24,7 +24,7 @@ from rq.connections import resolve_connection
 from rq.exceptions import DeserializationError
 from rq.exceptions import InvalidJobOperation
 from rq.exceptions import NoSuchJobError
-from rq.serializers import SerializerInterface
+from rq.serializers import SerializerProtocol
 from rq.serializers import resolve_serializer
 from rq.types import FunctionReferenceType
 from rq.types import JobDependencyType
@@ -73,7 +73,7 @@ class Job:
 
     redis_job_namespace_prefix = 'rq:job:'
 
-    def __init__(self, id: Optional[str] = None, connection: Optional['Redis'] = None, serializer: Optional[Type[SerializerInterface]] = None):
+    def __init__(self, id: Optional[str] = None, connection: Optional['Redis'] = None, serializer: Optional[Type[SerializerProtocol]] = None):
         if connection:
             self.connection = connection
         else:

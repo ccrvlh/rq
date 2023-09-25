@@ -1,14 +1,25 @@
 import json
 import pickle
 
+try:
+    import dill
+except ImportError:
+    dill = None
+
+try:
+    import orjson
+except ImportError:
+    orjson = None
+
 from typing import Optional
+from typing import Protocol
 from typing import Type
 from typing import Union
 
 from rq import utils
 
 
-class SerializerInterface:
+class SerializerProtocol(Protocol):
     """Interface for serializer objects."""
 
     @staticmethod
@@ -22,7 +33,7 @@ class SerializerInterface:
         raise NotImplementedError
 
 
-class PikleSerializer(SerializerInterface):
+class PikleSerializer:
     """Serializer that uses pickle to serialize objects."""
     @staticmethod
     def dumps(*args, **kwargs):
@@ -31,9 +42,6 @@ class PikleSerializer(SerializerInterface):
     @staticmethod
     def loads(s, *args, **kwargs):
         return pickle.loads(s, *args, **kwargs)
-
-
-DefaultSerializer = PikleSerializer
 
 
 class JSONSerializer:
@@ -46,7 +54,39 @@ class JSONSerializer:
         return json.loads(s.decode('utf-8'), *args, **kwargs)
 
 
-def resolve_serializer(serializer: Optional[Union[Type[SerializerInterface], str]] = None) -> Type[SerializerInterface]:
+class ORJSONSerializer:
+    @staticmethod
+    def dumps(*args, **kwargs):
+        if not orjson:
+            raise RuntimeError('`orjson` library is not installed.')
+        return orjson.dumps(*args, **kwargs).encode('utf-8')
+
+    @staticmethod
+    def loads(s, *args, **kwargs):
+        if not orjson:
+            raise RuntimeError('`orjson` library is not installed.')
+        return orjson.loads(s.decode('utf-8'), *args, **kwargs)
+
+
+class DillSerializer:
+    @staticmethod
+    def dumps(*args, **kwargs):
+        if not dill:
+            raise RuntimeError('`dill` library is not installed.')
+        return dill.dumps(*args, **kwargs).encode('utf-8')
+
+    @staticmethod
+    def loads(s, *args, **kwargs):
+        if not dill:
+            raise RuntimeError('`dill` library is not installed.')
+        return dill.loads(s.decode('utf-8'), *args, **kwargs)
+
+
+
+
+
+
+def resolve_serializer(serializer: Optional[Union[Type[SerializerProtocol], str]] = None) -> Type[SerializerProtocol]:
     """This function checks the user defined serializer for ('dumps', 'loads') methods
     It returns a default pickle serializer if not found else it returns a MySerializer
     The returned serializer objects implement ('dumps', 'loads') methods
@@ -59,7 +99,7 @@ def resolve_serializer(serializer: Optional[Union[Type[SerializerInterface], str
         serializer (Callable): An object that implements the SerializerProtocol
     """
     if not serializer:
-        return DefaultSerializer
+        return PikleSerializer
 
     if isinstance(serializer, str):
         serializer = utils.import_attribute(serializer)
@@ -71,3 +111,6 @@ def resolve_serializer(serializer: Optional[Union[Type[SerializerInterface], str
             raise NotImplementedError('Serializer should implement (dumps, loads) methods.')
 
     return serializer
+
+
+DefaultSerializer = PikleSerializer
