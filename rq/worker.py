@@ -29,6 +29,8 @@ from uuid import uuid4
 from redis import Redis
 from contextlib import suppress
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future
+from concurrent.futures import wait
 
 from rq.commands import handle_command
 from rq.commands import parse_payload
@@ -76,7 +78,7 @@ except ImportError:
     from signal import SIGTERM as SIGKILL
 
 try:
-    from setproctitle import setproctitle as setprocname
+    from setproctitle import setproctitle as setprocname  # type: ignore[import]
 except ImportError:
     def setprocname(*args, **kwargs):  # noqa
         pass
@@ -703,7 +705,7 @@ class Worker:
 
     def dequeue_job(
         self, timeout: Optional[int], max_idle_time: Optional[int] = None, maintain_ttl: bool = True
-    ) -> Tuple['Job', 'Queue']:
+    ) -> Optional[Tuple['Job', 'Queue']]:
         """Dequeues a job while (optionally) maintaining the TTL.
 
         Returns:
@@ -751,8 +753,8 @@ class Worker:
             except DequeueTimeout:
                 if max_idle_time is not None:
                     idle_for = (utils.utcnow() - idle_since).total_seconds()
-                    idle_time_left = math.ceil(max_idle_time - idle_for)
-                    if idle_time_left <= 0:
+                    _idle_time_left = math.ceil(max_idle_time - idle_for)
+                    if _idle_time_left <= 0:
                         break
             except redis.exceptions.ConnectionError as conn_err:
                 self.log.error(
@@ -761,8 +763,6 @@ class Worker:
                 time.sleep(connection_wait_time)
                 connection_wait_time *= self.exponential_backoff_factor
                 connection_wait_time = min(connection_wait_time, self.max_connection_wait_time)
-            else:
-                connection_wait_time = 1.0
 
         if maintain_ttl:
             self.heartbeat()
@@ -1934,3 +1934,9 @@ class MultiProcessWorker(Worker):
     def __init__(self, queues, name: str | None = None, default_result_ttl=DEFAULT_RESULT_TTL, connection: Redis | None = None, exc_handler=None, exception_handlers=None, default_worker_ttl=DEFAULT_WORKER_TTL, maintenance_interval: int = DEFAULT_MAINTENANCE_TASK_INTERVAL, job_class: type[Job] | None = None, queue_class: type[Queue] | None = None, log_job_description: bool = True, job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL, disable_default_exception_handler: bool = False, prepare_for_work: bool = True, serializer=None):
         super().__init__(queues, name, default_result_ttl, connection, exc_handler, exception_handlers, default_worker_ttl, maintenance_interval, job_class, queue_class, log_job_description, job_monitoring_interval, disable_default_exception_handler, prepare_for_work, serializer)
         raise NotImplementedError("MultiProcessWorker is not implemented yet")
+
+
+class GeventWorker(Worker):
+    def __init__(self, queues, name: str | None = None, default_result_ttl=DEFAULT_RESULT_TTL, connection: Redis | None = None, exc_handler=None, exception_handlers=None, default_worker_ttl=DEFAULT_WORKER_TTL, maintenance_interval: int = DEFAULT_MAINTENANCE_TASK_INTERVAL, job_class: type[Job] | None = None, queue_class: type[Queue] | None = None, log_job_description: bool = True, job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL, disable_default_exception_handler: bool = False, prepare_for_work: bool = True, serializer=None):
+        super().__init__(queues, name, default_result_ttl, connection, exc_handler, exception_handlers, default_worker_ttl, maintenance_interval, job_class, queue_class, log_job_description, job_monitoring_interval, disable_default_exception_handler, prepare_for_work, serializer)
+        raise NotImplementedError("GeventWorker is not implemented yet")

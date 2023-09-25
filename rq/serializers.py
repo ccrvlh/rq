@@ -2,23 +2,24 @@ import json
 import pickle
 
 try:
-    import dill
+    import dill  # type: ignore[import]
 except ImportError:
     dill = None
 
 try:
-    import orjson
+    import orjson  # type: ignore[import]
 except ImportError:
     orjson = None
 
-from typing import Optional
 from typing import Protocol
 from typing import Type
 from typing import Union
+from typing import runtime_checkable
 
 from rq import utils
 
 
+@runtime_checkable
 class SerializerProtocol(Protocol):
     """Interface for serializer objects."""
 
@@ -82,11 +83,7 @@ class DillSerializer:
         return dill.loads(s.decode('utf-8'), *args, **kwargs)
 
 
-
-
-
-
-def resolve_serializer(serializer: Optional[Union[Type[SerializerProtocol], str]] = None) -> Type[SerializerProtocol]:
+def resolve_serializer(serializer: Union[Type[SerializerProtocol], str, None] = None) -> Type[SerializerProtocol]:
     """This function checks the user defined serializer for ('dumps', 'loads') methods
     It returns a default pickle serializer if not found else it returns a MySerializer
     The returned serializer objects implement ('dumps', 'loads') methods
@@ -98,19 +95,23 @@ def resolve_serializer(serializer: Optional[Union[Type[SerializerProtocol], str]
     Returns:
         serializer (Callable): An object that implements the SerializerProtocol
     """
+    _serializer: type[SerializerProtocol] = PikleSerializer
+    
     if not serializer:
-        return PikleSerializer
+        return _serializer
 
     if isinstance(serializer, str):
-        serializer = utils.import_attribute(serializer)
+        _serializer = utils.import_attribute(serializer)  # type: ignore[assignment]
+
+    if isinstance(serializer, SerializerProtocol):
+        _serializer = serializer
 
     default_serializer_methods = ('dumps', 'loads')
-
     for instance_method in default_serializer_methods:
-        if not hasattr(serializer, instance_method):
+        if not hasattr(_serializer, instance_method):
             raise NotImplementedError('Serializer should implement (dumps, loads) methods.')
 
-    return serializer
+    return _serializer
 
 
 DefaultSerializer = PikleSerializer

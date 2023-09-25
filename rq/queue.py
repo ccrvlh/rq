@@ -5,7 +5,9 @@ import uuid
 import warnings
 
 from collections import namedtuple
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from functools import total_ordering
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Type, Union
 from redis import WatchError
@@ -13,7 +15,6 @@ from redis import WatchError
 from rq import utils
 from rq.timeouts import DeathPenaltyInterface
 from rq.timeouts import UnixSignalDeathPenalty
-from rq.connections import resolve_connection
 from rq.defaults import DEFAULT_RESULT_TTL
 from rq.dependency import Dependency
 from rq.exceptions import DequeueTimeout
@@ -21,6 +22,7 @@ from rq.exceptions import NoSuchJobError
 from rq.job import Callback
 from rq.job import Job
 from rq.job import JobStatus
+from rq.serializers import SerializerProtocol
 from rq.serializers import resolve_serializer
 from rq.types import JobDependencyType
 from rq.types import FunctionReferenceType
@@ -89,7 +91,7 @@ class Queue:
         connection: Optional['Redis'] = None,
         is_async: bool = True,
         job_class: Union[None, str, Type['Job']] = None,
-        serializer: Any = None,
+        serializer: Optional[type[SerializerProtocol]] = None,
         death_penalty_class: type[DeathPenaltyInterface] = UnixSignalDeathPenalty,
         **kwargs,
     ):
@@ -124,8 +126,8 @@ class Queue:
             if isinstance(job_class, str):
                 job_class = utils.import_attribute(job_class)
             self.job_class = job_class
-        self.death_penalty_class = death_penalty_class  # type: ignore
 
+        self.death_penalty_class = death_penalty_class
         self.serializer = resolve_serializer(serializer)
         self.redis_server_version: Optional[Tuple[int, int, int]] = None
 
@@ -1312,8 +1314,8 @@ class Queue:
             except Exception as e:
                 # Attach queue information on the exception for improved error
                 # reporting
-                e.job_id = job_id
-                e.queue = queue
+                setattr(e, 'job_id', job_id)
+                setattr(e, 'queue', queue)
                 raise e
             return job, queue
         return None, None
