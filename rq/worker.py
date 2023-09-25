@@ -1481,23 +1481,6 @@ class Worker:
         )
         return [utils.as_text(key) for key in Worker.get_keys(queue=queue, connection=connection)]
 
-    @classmethod
-    def count(cls, connection: Optional['Redis'] = None, queue: Optional['Queue'] = None) -> int:
-        """Returns the number of workers by queue or connection.
-
-        Args:
-            connection (Optional[Redis], optional): Redis connection. Defaults to None.
-            queue (Optional[Queue], optional): The queue to use. Defaults to None.
-
-        Returns:
-            length (int): The queue length.
-        """
-        warnings.warn(
-            "V2 Deprecation Warning: The `count()` method for the Worker class is deprecated. Use the main RQ class to count workers with `get_workers_count` instead.",
-            DeprecationWarning,
-        )
-        return len(Worker.get_keys(queue=queue, connection=connection))
-
     def __eq__(self, other):
         """Equality does not take the database/connection into account"""
         if not isinstance(other, self.__class__):
