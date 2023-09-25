@@ -24,9 +24,9 @@ QueueReferenceType = Union[str, 'Queue']
 """_summary_
 """
 
-JobReferenceType = Union[Job, str]
+JobReferenceType = Union['Job', str]
 """_summary_
 """
 
-WorkerReferenceType = Union[Worker, str]
+WorkerReferenceType = Union['Worker', str]
 """_summary_"""

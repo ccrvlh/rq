@@ -117,15 +117,15 @@ class TestThreadPoolWorkerRegistry(RQTestCase):
         redis = worker.connection
 
         self.assertTrue(redis.sismember(worker.redis_workers_keys, worker.key))
-        self.assertEqual(worker.count(connection=redis), 1)
+        self.assertEqual(self.rq.get_workers_count(), 1)
         self.assertTrue(
             redis.sismember(WORKERS_BY_QUEUE_KEY % foo_queue.name, worker.key)
         )
-        self.assertEqual(worker.count(queue=foo_queue), 1)
+        self.assertEqual(self.rq.get_workers_count(queue=foo_queue), 1)
         self.assertTrue(
             redis.sismember(WORKERS_BY_QUEUE_KEY % bar_queue.name, worker.key)
         )
-        self.assertEqual(worker.count(queue=bar_queue), 1)
+        self.assertEqual(self.rq.get_workers_count(queue=bar_queue), 1)
 
         Worker.unregister(worker)
         self.assertFalse(redis.sismember(worker.redis_workers_keys, worker.key))
