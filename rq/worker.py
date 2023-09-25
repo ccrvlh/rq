@@ -1464,23 +1464,6 @@ class Worker:
         ]
         return utils.compact(workers)
 
-    @classmethod
-    def all_keys(cls, connection: Optional['Redis'] = None, queue: Optional['Queue'] = None) -> List[str]:
-        """List of worker keys
-
-        Args:
-            connection (Optional[Redis], optional): A Redis Connection. Defaults to None.
-            queue (Optional[Queue], optional): The Queue. Defaults to None.
-
-        Returns:
-            list_keys (List[str]): A list of worker keys
-        """
-        warnings.warn(
-            "V2 Deprecation Warning: The `all_keys()` method for the Worker class is deprecated. Use the main RQ class to query for all workers' keys with `get_workers_keys` instead.",
-            DeprecationWarning,
-        )
-        return [utils.as_text(key) for key in Worker.get_keys(queue=queue, connection=connection)]
-
     def __eq__(self, other):
         """Equality does not take the database/connection into account"""
         if not isinstance(other, self.__class__):
@@ -1936,3 +1919,15 @@ class ThreadPoolWorker(Worker):
         self.executor.shutdown()
         if self.scheduler:
             self.stop_scheduler()
+
+
+class AsyncWorker(Worker):
+    def __init__(self, queues, name: str | None = None, default_result_ttl=DEFAULT_RESULT_TTL, connection: Redis | None = None, exc_handler=None, exception_handlers=None, default_worker_ttl=DEFAULT_WORKER_TTL, maintenance_interval: int = DEFAULT_MAINTENANCE_TASK_INTERVAL, job_class: type[Job] | None = None, queue_class: type[Queue] | None = None, log_job_description: bool = True, job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL, disable_default_exception_handler: bool = False, prepare_for_work: bool = True, serializer=None):
+        super().__init__(queues, name, default_result_ttl, connection, exc_handler, exception_handlers, default_worker_ttl, maintenance_interval, job_class, queue_class, log_job_description, job_monitoring_interval, disable_default_exception_handler, prepare_for_work, serializer)
+        raise NotImplementedError("AsyncWorker is not implemented yet")
+
+
+class MultiProcessWorker(Worker):
+    def __init__(self, queues, name: str | None = None, default_result_ttl=DEFAULT_RESULT_TTL, connection: Redis | None = None, exc_handler=None, exception_handlers=None, default_worker_ttl=DEFAULT_WORKER_TTL, maintenance_interval: int = DEFAULT_MAINTENANCE_TASK_INTERVAL, job_class: type[Job] | None = None, queue_class: type[Queue] | None = None, log_job_description: bool = True, job_monitoring_interval=DEFAULT_JOB_MONITORING_INTERVAL, disable_default_exception_handler: bool = False, prepare_for_work: bool = True, serializer=None):
+        super().__init__(queues, name, default_result_ttl, connection, exc_handler, exception_handlers, default_worker_ttl, maintenance_interval, job_class, queue_class, log_job_description, job_monitoring_interval, disable_default_exception_handler, prepare_for_work, serializer)
+        raise NotImplementedError("MultiProcessWorker is not implemented yet")
