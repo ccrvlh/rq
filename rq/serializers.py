@@ -100,14 +100,16 @@ def resolve_serializer(serializer: Union[Type[SerializerProtocol], str, None] = 
     if not serializer:
         return _serializer
 
+    is_string = isinstance(serializer, str)
+    is_serializer = isinstance(serializer, SerializerProtocol)
+    if not is_string and not is_serializer:
+        raise NotImplementedError('Serializer should be a string or a Serializer Protocol.')
+
     if isinstance(serializer, str):
         _serializer = utils.import_attribute(serializer)  # type: ignore[assignment]
 
     elif isinstance(serializer, SerializerProtocol):
         _serializer = serializer
-    
-    else:
-        raise NotImplementedError('Serializer should follow the Serializer Protocol.')
 
     default_serializer_methods = ('dumps', 'loads')
     for instance_method in default_serializer_methods:
