@@ -6,6 +6,7 @@ from redis import Redis
 
 from rq import registries
 from rq import utils
+from rq.utils import not_implemented
 from rq.job import Job
 from rq.job import JobStatus
 from rq.queue import Queue
@@ -159,21 +160,27 @@ class RQ:
             pipeline=pipeline,
         )
 
+    @not_implemented
     def send_job(self, queue: 'QueueReferenceType', job: 'JobReferenceType'):
         pass
 
+    @not_implemented
     def schedule(self):
         pass
-
+    
+    @not_implemented
     def schedule_job(self):
         pass
-
+    
+    @not_implemented
     def enqueue(self):
         pass
-
+    
+    @not_implemented
     def enqueue_at(self):
         pass
 
+    @not_implemented
     def enqueue_in(self):
         pass
 
@@ -234,11 +241,22 @@ class RQ:
         all_queues = [to_queue(rq_key) for rq_key in all_registerd_queues if rq_key]
         return all_queues
 
-    def get_queues_keys(self):
-        pass
+    def get_queues_keys(self) -> list[str]:
+        """List of Queues keys.
 
-    def get_queues_count(self):
-        pass
+        Returns:
+            list_keys (List[str]): A list of Queues keys
+        """
+        redis_key = self.queue_keys
+        return [utils.as_text(key) for key in self.conn.smembers(redis_key)]
+
+    def get_queues_count(self) -> int:
+        """Returns the number of queues.
+
+        Returns:
+            length (int): The queue length.
+        """
+        return len(self.get_queues_keys())
 
     # Workers
 
@@ -371,9 +389,11 @@ class RQ:
         channel = self.pubsub_channel + worker_name
         self.conn.publish(channel, json.dumps(payload))
 
+    @not_implemented
     def reload_worker(self):
         pass
 
+    @not_implemented
     def start_worker(self):
         pass
 
@@ -409,6 +429,7 @@ class RQ:
         status = utils.as_text(server_status)
         return JobStatus(status)
 
+    @not_implemented
     def get_all_jobs(self):
         pass
 
@@ -525,15 +546,19 @@ class RQ:
         job_exists = self.conn.exists(job_key)
         return bool(job_exists)
 
+    @not_implemented
     def cancel_job(self):
         pass
 
+    @not_implemented
     def exclude_job(self):
         pass
 
+    @not_implemented
     def save_job(self):
         pass
 
+    @not_implemented
     def create_job(self):
         pass
 

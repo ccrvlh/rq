@@ -97,12 +97,19 @@ def handle_command(worker: 'ForkWorker', payload: Dict[Any, Any]):
         worker (Worker): The worker to use
         payload (Dict[Any, Any]): The Payload
     """
-    if payload['command'] == 'stop-job':
+    received_command = payload.get('command', None)
+    if not received_command:
+        worker.log.warning('Received empty command, ignoring.')
+        return
+    
+    if received_command == 'stop-job':
         handle_stop_job_command(worker, payload)
-    elif payload['command'] == 'shutdown':
+    elif received_command == 'shutdown':
         handle_shutdown_command(worker)
-    elif payload['command'] == 'kill-horse':
+    elif received_command == 'kill-horse':
         handle_kill_worker_command(worker, payload)
+    else:
+        worker.log.warning('Received unknown command %s, ignoring.', received_command)
 
 
 def handle_shutdown_command(worker: 'ForkWorker'):

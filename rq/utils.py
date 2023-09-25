@@ -377,6 +377,12 @@ def signal_name(signum):
         return 'SIG_UNKNOWN'
 
 
+def not_implemented(f):
+    def wrapper(*args):
+        raise NotImplementedError('Method %s is not implemented.' % f.__name__)
+    return wrapper
+
+
 class _Colorizer:
     def __init__(self):
         esc = "\x1b["
