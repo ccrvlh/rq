@@ -21,8 +21,6 @@ from rq.exceptions import NoSuchJobError
 from rq.job import Callback
 from rq.job import Job
 from rq.job import JobStatus
-from rq.logutils import blue
-from rq.logutils import green
 from rq.serializers import resolve_serializer
 from rq.types import JobDependencyType
 from rq.types import FunctionReferenceType
@@ -253,7 +251,7 @@ class Queue:
                 return job
         except NoSuchJobError:
             self.remove(job_id)
-            self.log.debug('Could not find job %s, removing it from queue.', blue(job_id))
+            self.log.debug('Could not find job %s, removing it from queue.', utils.blue(job_id))
         return None
 
     def get_job_position(self, job_or_id: Union['Job', str]) -> Optional[int]:
@@ -299,7 +297,7 @@ class Queue:
         else:
             end = length
         job_ids = [utils.as_text(job_id) for job_id in self.connection.lrange(self.key, start, end)]
-        self.log.debug('Getting jobs for queue %s: %d found.', green(self.name), len(job_ids))
+        self.log.debug('Getting jobs for queue %s: %d found.', utils.green(self.name), len(job_ids))
         return job_ids
 
     def get_jobs(self, offset: int = 0, length: int = -1) -> List['Job']:
@@ -421,10 +419,10 @@ class Queue:
         push = connection.lpush if at_front else connection.rpush
         result = push(self.key, job_id)
         if pipeline is None:
-            self.log.debug('Pushed job %s into %s, %s job(s) are in queue.', blue(job_id), green(self.name), result)
+            self.log.debug('Pushed job %s into %s, %s job(s) are in queue.', utils.blue(job_id), utils.green(self.name), result)
         else:
             # Pipelines do not return the number of jobs in the queue.
-            self.log.debug('Pushed job %s into %s', blue(job_id), green(self.name))
+            self.log.debug('Pushed job %s into %s', utils.blue(job_id), utils.green(self.name))
 
     def create_job(
         self,
@@ -1217,7 +1215,7 @@ class Queue:
         if timeout is not None:  # blocking variant
             if timeout == 0:
                 raise ValueError('RQ does not support indefinite timeouts. Please pick a timeout value > 0')
-            colored_queues = ', '.join(map(str, [green(str(queue)) for queue in queue_keys]))
+            colored_queues = ', '.join(map(str, [utils.green(str(queue)) for queue in queue_keys]))
             logger.debug(f"Starting BLPOP operation for queues {colored_queues} with timeout of {timeout}")
             result = connection.blpop(queue_keys, timeout)
             if result is None:
@@ -1240,7 +1238,7 @@ class Queue:
         if timeout is not None:  # blocking variant
             if timeout == 0:
                 raise ValueError('RQ does not support indefinite timeouts. Please pick a timeout value > 0')
-            colored_queue = green(queue_key)
+            colored_queue = utils.green(queue_key)
             logger.debug(f"Starting BLMOVE operation for {colored_queue} with timeout of {timeout}")
             result = connection.blmove(queue_key, cls.get_intermediate_queue_key(queue_key), timeout)
             if result is None:

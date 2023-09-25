@@ -21,7 +21,7 @@ from rq.defaults import (
     DEFAULT_SERIALIZER_CLASS,
     DEFAULT_WORKER_CLASS,
 )
-from rq.logutils import setup_loghandlers
+from rq.logging import setup_loghandlers
 from rq.utils import import_attribute, parse_timeout
 from rq.worker import WorkerStatus
 

@@ -336,32 +336,32 @@ class TestWorker(RQTestCase):
         queue = Queue(connection=self.testconn)
         worker = ForkWorker(queues=[queue], connection=self.testconn)
 
-        worker.run_maintenance_tasks()
+        worker._run_maintenance_tasks()
         self.assertEqual(mocked.call_count, 0)
 
         # if scheduler object exists and it's a first start, acquire locks should not run
         worker.last_cleaned_at = None
         worker.scheduler = Scheduler([queue], connection=self.testconn)
-        worker.run_maintenance_tasks()
+        worker._run_maintenance_tasks()
         self.assertEqual(mocked.call_count, 0)
 
         # the scheduler exists and it's NOT a first start, since the process doesn't exists,
         # should call acquire_locks to start the process
         worker.last_cleaned_at = datetime.now()
-        worker.run_maintenance_tasks()
+        worker._run_maintenance_tasks()
         self.assertEqual(mocked.call_count, 1)
 
         # the scheduler exists, the process exists, but the process is not alive
         running_process = mock.MagicMock()
         running_process.is_alive.return_value = False
         worker.scheduler._process = running_process
-        worker.run_maintenance_tasks()
+        worker._run_maintenance_tasks()
         self.assertEqual(mocked.call_count, 2)
         self.assertEqual(running_process.is_alive.call_count, 1)
 
         # the scheduler exists, the process exits, and it is alive. acquire_locks shouldn't run
         running_process.is_alive.return_value = True
-        worker.run_maintenance_tasks()
+        worker._run_maintenance_tasks()
         self.assertEqual(mocked.call_count, 2)
         self.assertEqual(running_process.is_alive.call_count, 2)
 

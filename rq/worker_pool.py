@@ -19,7 +19,7 @@ from rq.defaults import DEFAULT_LOGGING_DATE_FORMAT
 from rq.defaults import DEFAULT_LOGGING_FORMAT
 from rq.defaults import DEFAULT_SERIALIZER_CLASS
 from rq.job import Job
-from rq.logutils import setup_loghandlers
+from rq.logging import setup_loghandlers
 from rq.queue import Queue
 from rq.worker import Worker
 from rq.worker import ForkWorker

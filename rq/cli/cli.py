@@ -29,7 +29,6 @@ from rq.defaults import (
 from rq.exceptions import InvalidJobOperationError
 from rq.job import JobStatus
 from rq.job import Job
-from rq.logutils import blue
 from rq.main import RQ
 from rq.registries import clean_job_registries
 from rq.registries import FailedJobRegistry
@@ -425,7 +424,7 @@ def enqueue(
             queue.schedule_job(job, schedule)
 
     if not quiet:
-        click.echo('Enqueued %s with job-id \'%s\'.' % (blue(function_string), job.id))
+        click.echo('Enqueued %s with job-id \'%s\'.' % (utils.blue(function_string), job.id))
 
 
 @main.command()

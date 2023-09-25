@@ -6,7 +6,7 @@ import traceback
 
 from datetime import datetime
 from multiprocessing import Process
-from typing import List, Set
+from typing import List, Optional, Set
 from redis import ConnectionPool
 from redis import Redis
 
@@ -19,7 +19,7 @@ from rq.defaults import DEFAULT_LOGGING_FORMAT
 from rq.defaults import DEFAULT_SCHEDULER_FALLBACK_PERIOD
 from rq.defaults import SCHEDULER_LOCKING_KEY_TEMPLATE
 from rq.const import SchedulerStatus
-from rq.logutils import setup_loghandlers
+from rq.logging import setup_loghandlers
 from rq.registries import ScheduledJobRegistry
 from rq.serializers import resolve_serializer
 
@@ -109,12 +109,13 @@ class Scheduler:
 
         return successful_locks
 
-    def prepare_registries(self, queue_names: str = None):
+    def prepare_registries(self, queue_names: Optional[list[str]] = None):
         """Prepare scheduled job registries for use"""
         self._scheduled_job_registries = []
-        if not queue_names:
-            queue_names = self._acquired_locks
-        for name in queue_names:
+        _queue_names = self._acquired_locks
+        if queue_names is not None:
+            _queue_names = set(queue_names)
+        for name in _queue_names:
             self._scheduled_job_registries.append(
                 ScheduledJobRegistry(name, connection=self.connection, serializer=self.serializer)
             )

@@ -262,7 +262,7 @@ class TestWorker(RQTestCase):
 
         # Now we try to run the job...
         w = ForkWorker([q])
-        job, queue = w.dequeue_job_and_maintain_ttl(10)
+        job, queue = w.dequeue_job(10)
         w.perform_job(job, queue)
 
         # An exception should be logged here at ERROR level
@@ -296,13 +296,13 @@ class TestWorker(RQTestCase):
         queue = Queue(connection=self.testconn)
         worker = ForkWorker([queue], connection=self.testconn)
         job = queue.enqueue(say_hello)
-        worker.maintain_heartbeats(job)
+        worker._maintain_heartbeats(job)
         self.assertTrue(self.testconn.exists(worker.key))
         self.assertTrue(self.testconn.exists(job.key))
 
         self.testconn.delete(job.key)
 
-        worker.maintain_heartbeats(job)
+        worker._maintain_heartbeats(job)
         self.assertFalse(self.testconn.exists(job.key))
 
     @pytest.mark.slow
@@ -651,24 +651,24 @@ class TestWorker(RQTestCase):
         q = Queue()
         w = ForkWorker([q])
         q.enqueue(say_hello, args=('Frank',))
-        self.assertIsNotNone(w.dequeue_job_and_maintain_ttl(1))
+        self.assertIsNotNone(w.dequeue_job(1))
 
         # idle for 1 second
-        self.assertIsNone(w.dequeue_job_and_maintain_ttl(1, max_idle_time=1))
+        self.assertIsNone(w.dequeue_job(1, max_idle_time=1))
 
         # idle for 3 seconds
         now = utcnow()
-        self.assertIsNone(w.dequeue_job_and_maintain_ttl(1, max_idle_time=3))
+        self.assertIsNone(w.dequeue_job(1, max_idle_time=3))
         self.assertLess((utcnow() - now).total_seconds(), 5)  # 5 for some buffer
 
         # idle for 2 seconds because idle_time is less than timeout
         now = utcnow()
-        self.assertIsNone(w.dequeue_job_and_maintain_ttl(3, max_idle_time=2))
+        self.assertIsNone(w.dequeue_job(3, max_idle_time=2))
         self.assertLess((utcnow() - now).total_seconds(), 4)  # 4 for some buffer
 
         # idle for 3 seconds because idle_time is less than two rounds of timeout
         now = utcnow()
-        self.assertIsNone(w.dequeue_job_and_maintain_ttl(2, max_idle_time=3))
+        self.assertIsNone(w.dequeue_job(2, max_idle_time=3))
         self.assertLess((utcnow() - now).total_seconds(), 5)  # 5 for some buffer
 
     @pytest.mark.slow  # noqa
@@ -701,7 +701,7 @@ class TestWorker(RQTestCase):
         q = Queue()
         w = ForkWorker([q])
 
-        self.assertIsNone(w.dequeue_job_and_maintain_ttl(None))
+        self.assertIsNone(w.dequeue_job(None))
 
     def test_worker_ttl_param_resolves_timeout(self):
         """
@@ -839,7 +839,7 @@ class TestWorker(RQTestCase):
         queue = Queue(connection=self.testconn)
         job = queue.enqueue(say_hello)
         worker = ForkWorker([queue])
-        worker.prepare_job_execution(job)
+        worker.prepare_job(job)
 
         # Updates working queue
         registry = StartedJobRegistry(connection=self.testconn)
@@ -861,7 +861,7 @@ class TestWorker(RQTestCase):
         Queue.dequeue_any([queue], timeout=None, connection=self.testconn)
         self.assertIsNotNone(self.testconn.lpos(queue.intermediate_queue_key, job.id))
         worker = ForkWorker([queue])
-        worker.prepare_job_execution(job, remove_from_intermediate_queue=True)
+        worker.prepare_job(job, remove_from_intermediate_queue=True)
         self.assertIsNone(self.testconn.lpos(queue.intermediate_queue_key, job.id))
         self.assertEqual(queue.count, 0)
 
@@ -993,7 +993,7 @@ class TestWorker(RQTestCase):
 
         worker = ForkWorker([foo_queue, bar_queue])
         self.assertEqual(worker.last_cleaned_at, None)
-        worker.clean_registries()
+        worker._clean_registries()
         self.assertNotEqual(worker.last_cleaned_at, None)
         self.assertEqual(self.testconn.zcard(foo_registry.key), 0)
         self.assertEqual(self.testconn.zcard(bar_registry.key), 0)
@@ -1001,7 +1001,7 @@ class TestWorker(RQTestCase):
         # worker.clean_registries() only runs once every 15 minutes
         # If we add another key, calling clean_registries() should do nothing
         self.testconn.zadd(bar_registry.key, {'bar': 1})
-        worker.clean_registries()
+        worker._clean_registries()
         self.assertEqual(self.testconn.zcard(bar_registry.key), 1)
 
     def test_should_run_maintenance_tasks(self):
@@ -1103,7 +1103,7 @@ class TestWorker(RQTestCase):
         q = Queue()
         w = ForkWorker([q])
         q.enqueue(say_hello, args=('Frank',), result_ttl=10)
-        w.dequeue_job_and_maintain_ttl(10)
+        w.dequeue_job(10)
         self.assertIn("Frank", mock_logger_info.call_args[0][2])
 
     @mock.patch('rq.worker.logger.info')
@@ -1112,7 +1112,7 @@ class TestWorker(RQTestCase):
         q = Queue()
         w = ForkWorker([q], log_job_description=False)
         q.enqueue(say_hello, args=('Frank',), result_ttl=10)
-        w.dequeue_job_and_maintain_ttl(10)
+        w.dequeue_job(10)
         self.assertNotIn("Frank", mock_logger_info.call_args[0][2])
 
     def test_worker_configures_socket_timeout(self):
@@ -1388,7 +1388,7 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
         if os.path.exists(sentinel_file):
             os.remove(sentinel_file)
         fooq.enqueue(create_file_after_timeout, sentinel_file, 100)
-        job, queue = w.dequeue_job_and_maintain_ttl(5)
+        job, queue = w.dequeue_job(5)
         w.fork_work_horse(job, queue)
         p = Process(target=wait_and_kill_work_horse, args=(w._horse_pid, 0.5))
         p.start()
@@ -1417,8 +1417,8 @@ class WorkerShutdownTestCase(TimeoutTestCase, RQTestCase):
 
         job = fooq.enqueue(launch_process_within_worker_and_store_pid, sentinel_file, 100)
 
-        _, queue = w.dequeue_job_and_maintain_ttl(5)
-        w.prepare_job_execution(job)
+        _, queue = w.dequeue_job(5)
+        w.prepare_job(job)
         w.fork_work_horse(job, queue)
         job.timeout = 5
         time.sleep(1)

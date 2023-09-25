@@ -26,6 +26,9 @@
 - RENAME: `registry.py` -> `registries.py`
 - RENAME: `command.py` -> `commands.py`
 - RENAME: `clean_registries` -> `clean_job_registries`
+- RENAME: `logutils` -> `logging`
+- Move colorize to `utils`
+- Mark some worker methods as private with `_`
 
 ### RQ 1.15.1 (2023-06-20)
 
