@@ -432,52 +432,6 @@ class Worker:
         """Pushes an exception handler onto the exc handler stack."""
         self._exc_handlers.append(handler_func)
 
-    def get_heartbeat_ttl(self, job: 'Job') -> int:
-        """Get's the TTL for the next heartbeat.
-        SimpleWorker Code:
-
-        Example::
-            ..code-block:: python
-
-                >>> def get_heartbeat_ttl(self, job):
-                >>>     if job.timeout == -1:
-                >>>         return DEFAULT_WORKER_TTL
-                >>>     else:
-                >>>         return int((job.timeout or DEFAULT_WORKER_TTL)) + 60
-
-        Args:
-            job (Job): The Job
-
-        Returns:
-            int: The heartbeat TTL.
-        """
-        if job.timeout and job.timeout > 0:
-            remaining_execution_time = job.timeout - self.current_job_working_time
-            return int(min(remaining_execution_time, self.job_monitoring_interval)) + 60
-        else:
-            return self.job_monitoring_interval + 60
-        
-    def maintain_heartbeats(self, job: 'Job'):
-        """Updates worker and job's last heartbeat field. If job was
-        enqueued with `result_ttl=0`, a race condition could happen where this heartbeat
-        arrives after job has been deleted, leaving a job key that contains only
-        `last_heartbeat` field.
-
-        hset() is used when updating job's timestamp. This command returns 1 if a new
-        Redis key is created, 0 otherwise. So in this case we check the return of job's
-        heartbeat() command. If a new key was created, this means the job was already
-        deleted. In this case, we simply send another delete command to remove the key.
-
-        https://github.com/rq/rq/issues/1450
-        """
-        with self.connection.pipeline() as pipeline:
-            self.heartbeat(self.job_monitoring_interval + 60, pipeline=pipeline)
-            ttl = self.get_heartbeat_ttl(job)
-            job.heartbeat(utils.utcnow(), ttl, pipeline=pipeline, xx=True)
-            results = pipeline.execute()
-            if results[2] == 1:
-                self.connection.delete(job.key)
-
     def register_birth(self):
         """Registers its own birth."""
         self.log.debug('Registering birth of worker %s', self.name)
@@ -676,6 +630,75 @@ class Worker:
             shuffle(self._ordered_queues)
             return
 
+    # Hearbeats
+
+    def get_heartbeat_ttl(self, job: 'Job') -> int:
+        """Get's the TTL for the next heartbeat.
+        SimpleWorker Code:
+
+        Example::
+            ..code-block:: python
+
+                >>> def get_heartbeat_ttl(self, job):
+                >>>     if job.timeout == -1:
+                >>>         return DEFAULT_WORKER_TTL
+                >>>     else:
+                >>>         return int((job.timeout or DEFAULT_WORKER_TTL)) + 60
+
+        Args:
+            job (Job): The Job
+
+        Returns:
+            int: The heartbeat TTL.
+        """
+        if job.timeout and job.timeout > 0:
+            remaining_execution_time = job.timeout - self.current_job_working_time
+            return int(min(remaining_execution_time, self.job_monitoring_interval)) + 60
+        else:
+            return self.job_monitoring_interval + 60
+        
+    def maintain_heartbeats(self, job: 'Job'):
+        """Updates worker and job's last heartbeat field. If job was
+        enqueued with `result_ttl=0`, a race condition could happen where this heartbeat
+        arrives after job has been deleted, leaving a job key that contains only
+        `last_heartbeat` field.
+
+        hset() is used when updating job's timestamp. This command returns 1 if a new
+        Redis key is created, 0 otherwise. So in this case we check the return of job's
+        heartbeat() command. If a new key was created, this means the job was already
+        deleted. In this case, we simply send another delete command to remove the key.
+
+        https://github.com/rq/rq/issues/1450
+        """
+        with self.connection.pipeline() as pipeline:
+            self.heartbeat(self.job_monitoring_interval + 60, pipeline=pipeline)
+            ttl = self.get_heartbeat_ttl(job)
+            job.heartbeat(utils.utcnow(), ttl, pipeline=pipeline, xx=True)
+            results = pipeline.execute()
+            if results[2] == 1:
+                self.connection.delete(job.key)
+
+    def heartbeat(self, timeout: Optional[int] = None, pipeline: Optional['Pipeline'] = None):
+        """Specifies a new worker timeout, typically by extending the
+        expiration time of the worker, effectively making this a "heartbeat"
+        to not expire the worker until the timeout passes.
+
+        The next heartbeat should come before this time, or the worker will
+        die (at least from the monitoring dashboards).
+
+        If no timeout is given, the worker_ttl will be used to update
+        the expiration time of the worker.
+
+        Args:
+            timeout (Optional[int]): Timeout
+            pipeline (Optional[Redis]): A Redis pipeline
+        """
+        timeout = timeout or self.worker_ttl + 60
+        connection: Union[Redis, 'Pipeline'] = pipeline if pipeline is not None else self.connection
+        connection.expire(self.key, timeout)
+        connection.hset(self.key, 'last_heartbeat', utils.utcformat(utils.utcnow()))
+        self.log.debug('Sent heartbeat to prevent worker timeout. Next one should arrive in %s seconds.', timeout)
+
     # Work & Execution
 
     def dequeue_job_and_maintain_ttl(
@@ -743,27 +766,6 @@ class Worker:
 
         self.heartbeat()
         return result
-
-    def heartbeat(self, timeout: Optional[int] = None, pipeline: Optional['Pipeline'] = None):
-        """Specifies a new worker timeout, typically by extending the
-        expiration time of the worker, effectively making this a "heartbeat"
-        to not expire the worker until the timeout passes.
-
-        The next heartbeat should come before this time, or the worker will
-        die (at least from the monitoring dashboards).
-
-        If no timeout is given, the worker_ttl will be used to update
-        the expiration time of the worker.
-
-        Args:
-            timeout (Optional[int]): Timeout
-            pipeline (Optional[Redis]): A Redis pipeline
-        """
-        timeout = timeout or self.worker_ttl + 60
-        connection: Union[Redis, 'Pipeline'] = pipeline if pipeline is not None else self.connection
-        connection.expire(self.key, timeout)
-        connection.hset(self.key, 'last_heartbeat', utils.utcformat(utils.utcnow()))
-        self.log.debug('Sent heartbeat to prevent worker timeout. Next one should arrive in %s seconds.', timeout)
 
     def bootstrap(
         self,
