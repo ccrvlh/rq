@@ -1,0 +1,6 @@
+[flake8]
+ignore = E203, E266, E501, W503, F403, F401, F841
+max-line-length = 100
+max-complexity = 18
+select = B,C,E,F,W,T4,B9
+exclude = .git, .venv, __pycache__, .local, .mypy_cache, .pytest_cache

@@ -1,24 +1,23 @@
 import json
 
 from logging import getLogger
-from typing import Any, List, Optional, Type, TypeVar, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Type, Union
 from redis import Redis
 
 from rq import registries
 from rq import utils
-from rq.connections import resolve_connection
 from rq.job import Job
 from rq.job import JobStatus
 from rq.queue import Queue
 from rq.timeouts import DeathPenaltyInterface
 from rq.timeouts import UnixSignalDeathPenalty
-from rq.types import FunctionReferenceType
-from rq.worker import Worker, Worker
+from rq.worker import Worker
 
-
-QueueReference = TypeVar('QueueReference', str, Queue)
-JobReference = TypeVar('JobReference', str, Job)
-WorkerReference = TypeVar('WorkerReference', str, Worker)
+if TYPE_CHECKING:
+    from rq.types import WorkerReferenceType
+    from rq.types import QueueReferenceType
+    from rq.types import FunctionReferenceType
+    from rq.types import JobReferenceType
 
 
 class RQ:
@@ -109,7 +108,7 @@ class RQ:
 
     # Sends
 
-    def send(self, queue: QueueReference, f: 'FunctionReferenceType', *args, **kwargs) -> 'Job':
+    def send(self, queue: QueueReferenceType, f: 'FunctionReferenceType', *args, **kwargs) -> 'Job':
         """Creates a job to represent the delayed function call and enqueues it.
         Receives the same parameters accepted by the `enqueue_call` method.
 
@@ -160,7 +159,7 @@ class RQ:
             pipeline=pipeline,
         )
 
-    def send_job(self, queue: QueueReference, job: JobReference):
+    def send_job(self, queue: QueueReferenceType, job: JobReferenceType):
         pass
 
     def schedule(self):
@@ -332,11 +331,11 @@ class RQ:
         """
         return len(self.get_workers_keys(queue))
 
-    def get_current_job(self, worker: WorkerReference) -> Optional[Job]:
+    def get_current_job(self, worker: WorkerReferenceType) -> Optional[Job]:
         """Gets the current job being executed by a worker
 
         Args:
-            worker (WorkerReference): The worker to get the current job from
+            worker (WorkerReferenceType): The worker to get the current job from
 
         Returns:
             job (Optional[Job]): The job
@@ -347,11 +346,11 @@ class RQ:
         job = _worker.get_current_job()
         return job
 
-    def get_current_job_id(self, worker: WorkerReference) -> Optional[str]:
+    def get_current_job_id(self, worker: WorkerReferenceType) -> Optional[str]:
         """Gets the current job id being executed by a worker
 
         Args:
-            worker (WorkerReference): The worker to get the current job from
+            worker (WorkerReferenceType): The worker to get the current job from
 
         Returns:
             job (Optional[Job]): The job
@@ -413,11 +412,11 @@ class RQ:
     def get_all_jobs(self):
         pass
 
-    def get_queued_jobs(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[Job]:
+    def get_queued_jobs(self, queue: QueueReferenceType, offset: int = 0, limit: int = -1) -> List[Job]:
         """Get a list of queued jobs from a given queue reference
 
         Args:
-            queue (QueueReference): The queue reference
+            queue (QueueReferenceType): The queue reference
             offset (int, optional): The offset. Defaults to 0.
             limit (int, optional): The limit. Defaults to -1 (no limit).
 
@@ -428,11 +427,11 @@ class RQ:
         jobs = _queue.get_jobs(offset, limit)
         return jobs
 
-    def get_queued_jobs_ids(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[str]:
+    def get_queued_jobs_ids(self, queue: QueueReferenceType, offset: int = 0, limit: int = -1) -> List[str]:
         """Get a list of queued jobs ids from a given queue reference.
 
         Args:
-            queue (QueueReference): The queue reference
+            queue (QueueReferenceType): The queue reference
             offset (int, optional): The offset. Defaults to 0.
             limit (int, optional): The limit. Defaults to -1 (no limit).
 
@@ -443,11 +442,11 @@ class RQ:
         job_ids = _queue.get_job_ids(offset, limit)
         return job_ids
 
-    def get_deferred_jobs_ids(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[str]:
+    def get_deferred_jobs_ids(self, queue: QueueReferenceType, offset: int = 0, limit: int = -1) -> List[str]:
         """Get a list of deferred job ids from a given queue.
 
         Args:
-            queue (QueueReference): The queue reference
+            queue (QueueReferenceType): The queue reference
             offset (int, optional): Offset. Defaults to 0.
             limit (int, optional): Limit. Defaults to -1 (no limit).
 
@@ -457,11 +456,11 @@ class RQ:
         job_ids = self._get_job_ids_from_registry(registries.DeferredJobRegistry, queue, offset, limit)
         return job_ids
 
-    def get_scheduled_jobs(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[str]:
+    def get_scheduled_jobs(self, queue: QueueReferenceType, offset: int = 0, limit: int = -1) -> List[str]:
         """Get a list of scheduled job ids from a given queue.
 
         Args:
-            queue (QueueReference): The queue reference
+            queue (QueueReferenceType): The queue reference
             offset (int, optional): Offset. Defaults to 0.
             limit (int, optional): Limit. Defaults to -1 (no limit).
 
@@ -471,11 +470,11 @@ class RQ:
         job_ids = self._get_job_ids_from_registry(registries.ScheduledJobRegistry, queue, offset, limit)
         return job_ids
 
-    def get_started_jobs(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[str]:
+    def get_started_jobs(self, queue: QueueReferenceType, offset: int = 0, limit: int = -1) -> List[str]:
         """Get a list of started job ids from a given queue.
 
         Args:
-            queue (QueueReference): The queue reference
+            queue (QueueReferenceType): The queue reference
             offset (int, optional): Offset. Defaults to 0.
             limit (int, optional): Limit. Defaults to -1 (no limit).
 
@@ -485,11 +484,11 @@ class RQ:
         job_ids = self._get_job_ids_from_registry(registries.StartedJobRegistry, queue, offset, limit)
         return job_ids
 
-    def get_failed_jobs(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[str]:
+    def get_failed_jobs(self, queue: QueueReferenceType, offset: int = 0, limit: int = -1) -> List[str]:
         """Get a list of failed job ids from a given queue.
 
         Args:
-            queue (QueueReference): The queue reference
+            queue (QueueReferenceType): The queue reference
             offset (int, optional): Offset. Defaults to 0.
             limit (int, optional): Limit. Defaults to -1 (no limit).
 
@@ -499,11 +498,11 @@ class RQ:
         job_ids = self._get_job_ids_from_registry(registries.FailedJobRegistry, queue, offset, limit)
         return job_ids
 
-    def get_finished_jobs(self, queue: QueueReference, offset: int = 0, limit: int = -1) -> List[str]:
+    def get_finished_jobs(self, queue: QueueReferenceType, offset: int = 0, limit: int = -1) -> List[str]:
         """Get a list of finished job ids from a given queue.
 
         Args:
-            queue (QueueReference): The queue reference
+            queue (QueueReferenceType): The queue reference
             offset (int, optional): Offset. Defaults to 0.
             limit (int, optional): Limit. Defaults to -1 (no limit).
 
@@ -540,12 +539,12 @@ class RQ:
 
     ## Internals
 
-    def _get_queue_from_reference(self, ref: QueueReference) -> Queue:
+    def _get_queue_from_reference(self, ref: QueueReferenceType) -> Queue:
         """Get's a Queue instance from a reference.
         A Reference can be a string with the queue name, or the Queue instance itself.
 
         Args:
-            ref (QueueReference): The Queue Reference
+            ref (QueueReferenceType): The Queue Reference
 
         Raises:
             TypeError: If any other type other than string or Queue is used
@@ -563,12 +562,12 @@ class RQ:
         _queue = Queue.from_queue_key(queue_key, connection=self.conn)
         return _queue
 
-    def _get_worker_from_reference(self, ref: WorkerReference) -> Optional[Worker]:
+    def _get_worker_from_reference(self, ref: WorkerReferenceType) -> Optional[Worker]:
         """Get's a Worker instance from a reference.
         A Reference can be a string with the worker name, or the Worker instance itself.
 
         Args:
-            ref (WorkerReference): The Worker Reference
+            ref (WorkerReferenceType): The Worker Reference
 
         Raises:
             TypeError: If any other type other than string or Worker is used
@@ -586,14 +585,14 @@ class RQ:
         return _worker
 
     def _get_job_ids_from_registry(
-        self, registry: Type[registries.BaseRegistry], queue: QueueReference, offset: int = 0, limit: int = -1
+        self, registry: Type[registries.BaseRegistry], queue: QueueReferenceType, offset: int = 0, limit: int = -1
     ) -> List[str]:
         """Get's a list of the Jobs IDs from a given registry.
         This is an internal shortcut to be used by many registries types.
 
         Args:
             registry (Type[registry.BaseRegistry]): The Registry
-            queue (QueueReference): The Queue reference
+            queue (QueueReferenceType): The Queue reference
             offset (int, optional): The Offset. Defaults to 0.
             limit (int, optional): The Limit. Defaults to -1 (no limit).
 

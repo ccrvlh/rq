@@ -90,7 +90,7 @@ class Queue:
         default_timeout: Optional[int] = None,
         connection: Optional['Redis'] = None,
         is_async: bool = True,
-        job_class: Optional[Union[str, Type['Job']]] = None,
+        job_class: Union[None, str, Type['Job']] = None,
         serializer: Any = None,
         death_penalty_class: type[DeathPenaltyInterface] = UnixSignalDeathPenalty,
         **kwargs,
@@ -442,9 +442,9 @@ class Queue:
         status: JobStatus = JobStatus.QUEUED,
         retry: Optional['Retry'] = None,
         *,
-        on_success: Optional[Union[Callback, Callable]] = None,
-        on_failure: Optional[Union[Callback, Callable]] = None,
-        on_stopped: Optional[Union[Callback, Callable]] = None,
+        on_success: Union[None, Callback, Callable] = None,
+        on_failure: Union[None, Callback, Callable] = None,
+        on_stopped: Union[None, Callback, Callable] = None,
     ) -> Job:
         """Creates a job based on parameters given
 
@@ -462,11 +462,11 @@ class Queue:
             meta (Optional[Dict], optional): Job metadata. Defaults to None.
             status (JobStatus, optional): Job status. Defaults to JobStatus.QUEUED.
             retry (Optional[Retry], optional): The Retry Object. Defaults to None.
-            on_success (Optional[Union[Callback, Callable[..., Any]]], optional): Callback for on success. Defaults to
+            on_success (Union[None, Callback, Callable[..., Any]]], optional): Callback for on success. Defaults to
                 None. Callable is deprecated.
-            on_failure (Optional[Union[Callback, Callable[..., Any]]], optional): Callback for on failure. Defaults to
+            on_failure (Union[None, Callback, Callable[..., Any]]], optional): Callback for on failure. Defaults to
                 None. Callable is deprecated.
-            on_stopped (Optional[Union[Callback, Callable[..., Any]]], optional): Callback for on stopped. Defaults to
+            on_stopped (Union[None, Callback, Callable[..., Any]]], optional): Callback for on stopped. Defaults to
                 None. Callable is deprecated.
             pipeline (Optional[Pipeline], optional): The Redis Pipeline. Defaults to None.
 
@@ -888,9 +888,9 @@ class Queue:
         at_front: bool = False,
         meta: Optional[Dict] = None,
         retry: Optional['Retry'] = None,
-        on_success: Optional[Union[Callback, Callable[..., Any]]] = None,
-        on_failure: Optional[Union[Callback, Callable[..., Any]]] = None,
-        on_stopped: Optional[Union[Callback, Callable[..., Any]]] = None,
+        on_success: Union[None, Callback, Callable[..., Any]] = None,
+        on_failure: Union[None, Callback, Callable[..., Any]] = None,
+        on_stopped: Union[None, Callback, Callable[..., Any]] = None,
         pipeline: Optional['Pipeline'] = None,
     ) -> Job:
         """Creates a job to represent the delayed function call and enqueues it.
@@ -913,11 +913,11 @@ class Queue:
             at_front (bool, optional): Whether to enqueue the job at the front. Defaults to False.
             meta (Optional[Dict], optional): Metadata to attach to the job. Defaults to None.
             retry (Optional[Retry], optional): Retry object. Defaults to None.
-            on_success (Optional[Union[Callback, Callable[..., Any]]], optional): Callback for on success. Defaults to
+            on_success (Union[None, Callback, Callable[..., Any]]], optional): Callback for on success. Defaults to
                 None. Callable is deprecated.
-            on_failure (Optional[Union[Callback, Callable[..., Any]]], optional): Callback for on failure. Defaults to
+            on_failure (Union[None, Callback, Callable[..., Any]]], optional): Callback for on failure. Defaults to
                 None. Callable is deprecated.
-            on_stopped (Optional[Union[Callback, Callable[..., Any]]], optional): Callback for on stopped. Defaults to
+            on_stopped (Union[None, Callback, Callable[..., Any]]], optional): Callback for on stopped. Defaults to
                 None. Callable is deprecated.
             pipeline (Optional[Pipeline], optional): The Redis Pipeline. Defaults to None.
 
@@ -1075,9 +1075,9 @@ class Queue:
         at_front: bool = False,
         meta: Optional[Dict] = None,
         retry: Optional['Retry'] = None,
-        on_success: Optional[Union[Callback, Callable]] = None,
-        on_failure: Optional[Union[Callback, Callable]] = None,
-        on_stopped: Optional[Union[Callback, Callable]] = None,
+        on_success: Union[None, Callback, Callable] = None,
+        on_failure: Union[None, Callback, Callable] = None,
+        on_stopped: Union[None, Callback, Callable] = None,
     ) -> EnqueueData:
         """Need this till support dropped for python_version < 3.7, where defaults can be specified for named tuples
         And can keep this logic within EnqueueData
@@ -1096,11 +1096,11 @@ class Queue:
             at_front (bool, optional): Whether to enqueue the job at the front. Defaults to False.
             meta (Optional[Dict], optional): Metadata to attach to the job. Defaults to None.
             retry (Optional[Retry], optional): Retry object. Defaults to None.
-            on_success (Optional[Union[Callback, Callable[..., Any]]], optional): Callback for on success. Defaults to
+            on_success (Union[None, Callback, Callable[..., Any]]], optional): Callback for on success. Defaults to
                 None. Callable is deprecated.
-            on_failure (Optional[Union[Callback, Callable[..., Any]]], optional): Callback for on failure. Defaults to
+            on_failure (Union[None, Callback, Callable[..., Any]]], optional): Callback for on failure. Defaults to
                 None. Callable is deprecated.
-            on_stopped (Optional[Union[Callback, Callable[..., Any]]], optional): Callback for on stopped. Defaults to
+            on_stopped (Union[None, Callback, Callable[..., Any]]], optional): Callback for on stopped. Defaults to
                 None. Callable is deprecated.
 
         Returns:
@@ -1261,7 +1261,7 @@ class Queue:
         connection: 'Redis',
         job_class: Optional[Type['Job']] = None,
         serializer: Any = None,
-        death_penalty_class: Optional[Type[DeathPenaltyInterface]] = None,
+        death_penalty_class: Type[DeathPenaltyInterface] = UnixSignalDeathPenalty,
     ) -> Optional[Tuple['Job', 'Queue']]:
         """Class method returning the job_class instance at the front of the given
         set of Queues, where the order of the queues is important.
@@ -1365,7 +1365,7 @@ class Queue:
         connection: Optional['Redis'] = None,
         job_class: Optional[Type['Job']] = None,
         serializer: Any = None,
-        death_penalty_class: Optional[Type[DeathPenaltyInterface]] = None,
+        death_penalty_class: Type[DeathPenaltyInterface] = UnixSignalDeathPenalty,
     ) -> 'Queue':
         """Returns a Queue instance, based on the naming conventions for naming
         the internal Redis keys.  Can be used to reverse-lookup Queues by their
