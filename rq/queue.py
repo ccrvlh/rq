@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Ty
 from redis import WatchError
 
 from rq import utils
+from rq.connections import resolve_connection
 from rq.timeouts import DeathPenaltyInterface
 from rq.timeouts import UnixSignalDeathPenalty
 from rq.defaults import DEFAULT_RESULT_TTL
